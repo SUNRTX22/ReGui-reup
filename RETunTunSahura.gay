@@ -2083,18 +2083,468 @@ return Lib
 end
 
 Modules['classes.Wrappers'] = function()
--- ERROR: File not found: C:\Users\sungf\OneDrive\เดสก์ท็อป\Dear-ReGui-main (2)\Dear-ReGui-main\classes\Wrappers.lua
+local Wrappers = {
+    Services = {},
+    OnInitConnections = {}
+}
 
+export type table = {
+    [any]: any
+}
+
+--// Compatibility 
+local GetHiddenUI = get_hidden_gui or gethui
+local NewReference = cloneref or function(...): Instance 
+	return ... 
+end
+
+--// Service handlers
+local Services = Wrappers.Services
+setmetatable(Services, {
+	__index = function(self, Name: string)
+		local Service = game:GetService(Name)
+		return NewReference(Service)
+	end,
+})
+
+--// Services
+local CoreGui = Services.CoreGui
+
+--// Modules
+local ReGui
+
+function Wrappers:AddOnInit(Func: (table)->nil)
+    local Connections = self.OnInitConnections
+    table.insert(Connections, Func)
+end
+
+function Wrappers:NewReference(Object: Instance): Instance
+	return NewReference(Object)
+end
+
+function Wrappers:CallOnInitConnections(ReGuiModule, ...)
+    local Connections = self.OnInitConnections
+    ReGui = ReGuiModule
+
+    for _, Func in next, Connections do
+        Func(ReGui, ...)
+    end
+end
+
+function Wrappers:SetProperties(Object: Instance, Properties: table)
+	for Key: string, Value in next, Properties do
+		pcall(function()
+			Object[Key] = Value
+		end)
+	end
+end
+
+function Wrappers:NewClass(Class: table, Merge: table?)
+	Merge = Merge or {}
+	Class.__index = Class
+	return setmetatable(Merge, Class)
+end
+
+function Wrappers:CheckConfig(Source: table, Base: table, Call: boolean?, IgnoreKeys: table?)
+	if not Source then return end 
+
+	for Key: string?, Value in next, Base do
+		if Source[Key] ~= nil then continue end
+
+		--// Check the key should be ignored
+		if IgnoreKeys then
+			if table.find(IgnoreKeys, Key) then continue end
+		end
+
+		--// Call value function
+		if Call then
+			Value = Value()
+		end
+
+		--// Set value
+		Source[Key] = Value
+	end
+
+	return Source
+end
+
+function Wrappers:ResolveUIParent(): GuiObject?
+	local PlayerGui = ReGui.PlayerGui
+	local Debug = ReGui.Debug
+
+	local Steps = {
+		[1] = function()
+			local Parent = GetHiddenUI()
+			if Parent.Parent == CoreGui then return end
+
+			return Parent
+		end,
+		[2] = function()
+			return CoreGui
+		end,
+		[3] = function()
+			return PlayerGui
+		end
+	}
+
+	local Test = ReGui:CreateInstance("ScreenGui")
+
+	--// Test each step for a successful parent
+	for Step, Func in next, Steps do
+		--// Test fetching the parent
+		local Success, Parent = pcall(Func)
+		if not Success or not Parent then continue end
+
+		--// Test parenting
+		local CanParent = pcall(function()
+			Test.Parent = Parent
+		end)
+		if not CanParent then continue end
+
+		if Debug then
+			ReGui:Warn(`Step: {Step} was chosen as the parent!: {Parent}`)
+		end
+
+		return Parent
+	end
+
+	--// Error message
+	ReGui:Warn("The ReGui container does not have a parent defined")
+
+	return nil
+end
+
+function Wrappers:GetChildOfClass(Object: GuiObject, ClassName: string): GuiObject
+	local Child = Object:FindFirstChildOfClass(ClassName)
+
+	--// Create missing child
+	if not Child then
+		Child = ReGui:CreateInstance(ClassName, Object)
+	end
+
+	return Child
+end
+
+function Wrappers:CheckAssetUrl(Url: (string|number)): string
+	--// Convert Id number to asset URL
+	if tonumber(Url) then
+		return `rbxassetid://{Url}`
+	end
+	return Url
+end
+
+function Wrappers:SetPadding(UiPadding: UIPadding, Padding: UDim)
+	if not UiPadding then return end
+
+	self:SetProperties(UiPadding, {
+		PaddingBottom = Padding,
+		PaddingLeft = Padding,
+		PaddingRight = Padding,
+		PaddingTop = Padding
+	})
+end
+
+return Wrappers
 end
 
 Modules['classes.Animations'] = function()
--- ERROR: File not found: C:\Users\sungf\OneDrive\เดสก์ท็อป\Dear-ReGui-main (2)\Dear-ReGui-main\classes\Animations.lua
+--// Animation class
 
+type table = {
+    [any]: any
+}
+
+export type ObjectTable = { 
+	[GuiObject]: any 
+}
+
+local Wrappers = Modules.load("classes.Wrappers")
+local Animation = {
+    DefaultTweenInfo = TweenInfo.new(0.08),
+}
+
+local Services = Wrappers.Services
+local TweenService = Services.TweenService
+
+type AnimationTween = {
+	Object: Instance,
+	NoAnimation: boolean?,
+	Tweeninfo: TweenInfo?,
+    StartProperties: table?,
+	EndProperties: table,
+	Completed: (() -> any?)?
+}
+function Animation:Tween(Data: AnimationTween): Tween?
+	local DefaultTweenInfo = self.DefaultTweenInfo
+
+	--// Unpack animation data for the Tween
+	local Object = Data.Object
+	local NoAnimation = Data.NoAnimation
+	local Tweeninfo = Data.Tweeninfo or DefaultTweenInfo
+	local EndProperties = Data.EndProperties
+	local StartProperties = Data.StartProperties
+	local Completed = Data.Completed
+
+	--// Apply Start Properties to the object
+	if StartProperties then
+		Wrappers:SetProperties(Object, StartProperties)
+	end
+
+	--// Set properties without a tween for NoAnimation flag
+	if NoAnimation then
+		Wrappers:SetProperties(Object, EndProperties)
+
+		--// Invoke Completed event
+		if Completed then
+			Completed()
+		end
+		return
+	end
+
+	--// Create the tween animation
+	local MasterTween = nil
+	for Key, Value in next, EndProperties do
+		local Properties = {
+			[Key] = Value
+		}
+
+		--// Create the tween for the property
+		local Success, Tween = pcall(function()
+			return TweenService:Create(Object, Tweeninfo, Properties)
+		end)
+
+		--// Set Properties instead of tweening
+		if not Success then
+			Wrappers:SetProperties(Object, Properties)
+			continue
+		end
+
+		--// Set the MasterTween if it does not exist
+		if not MasterTween then
+			MasterTween = Tween
+		end
+
+		Tween:Play()
+	end
+
+	--// Connect the TweenCompleted event
+	if Completed then
+		if MasterTween then
+			MasterTween.Completed:Connect(Completed)
+		else
+			Completed()
+		end
+	end
+
+	return MasterTween
+end
+
+type Animate = {
+	NoAnimation: boolean?,
+	Objects: ObjectTable,
+	Tweeninfo: TweenInfo?,
+	Completed: () -> any,
+}
+function Animation:Animate(Data: Animate): Tween
+	local NoAnimation = Data.NoAnimation
+	local Objects = Data.Objects
+	local Tweeninfo = Data.Tweeninfo
+	local Completed = Data.Completed
+
+	local BaseTween = nil
+
+	--// Create tweens
+	for Object, EndProperties in next, Objects do
+		local Tween = self:Tween({
+			NoAnimation = NoAnimation,
+			Object = Object,
+			Tweeninfo = Tweeninfo, 
+			EndProperties = EndProperties
+		})
+
+		if not BaseTween then
+			BaseTween = Tween
+		end
+	end
+
+	--// Connect completed event call
+	if Completed then
+		BaseTween.Completed:Connect(Completed)
+	end
+
+	return BaseTween
+end
+
+type HeaderCollapseToggle = {
+	Rotations: {
+		Open: number?,
+		Closed: number?
+	}?,
+	Toggle: GuiObject,
+	NoAnimation: boolean?,
+	Collapsed: boolean,
+	Tweeninfo: TweenInfo?,
+}
+function Animation:HeaderCollapseToggle(Data: HeaderCollapseToggle)
+	--// Check configuration
+	Wrappers:CheckConfig(Data, {
+		Rotations = {
+			Open = 90,
+			Closed = 0
+		}
+	})
+
+	--// Unpack configuration
+	local Toggle = Data.Toggle
+	local NoAnimation = Data.NoAnimation
+	local Rotations = Data.Rotations
+	local Collapsed = Data.Collapsed
+	local Tweeninfo = Data.Tweeninfo
+
+	local Rotation = Collapsed and Rotations.Closed or Rotations.Open
+
+	--// Animate toggle
+	self:Tween({
+		Tweeninfo = Tweeninfo,
+		NoAnimation = NoAnimation,
+		Object = Toggle,
+		EndProperties = {
+			Rotation = Rotation,
+		}
+	})
+end
+
+type HeaderCollapse = {
+	Collapsed: boolean,
+	ClosedSize: UDim2,
+	OpenSize: UDim2,
+	Toggle: Instance,
+	Resize: Instance?,
+	Hide: Instance?,
+	NoAnimation: boolean?,
+	NoAutomaticSize: boolean?,
+	Tweeninfo: TweenInfo?,
+	IconOnly: boolean?,
+	Completed: (() -> any)?,
+	IconRotations: {
+		Open: number?,
+		Closed: number?
+	}?
+}
+function Animation:HeaderCollapse(Data: HeaderCollapse): Tween
+	--// Unpack config
+	local Tweeninfo = Data.Tweeninfo
+	local Collapsed = Data.Collapsed
+	local ClosedSize = Data.ClosedSize
+	local OpenSize: UDim2 = Data.OpenSize
+	local Toggle = Data.Toggle
+	local Resize = Data.Resize
+	local Hide = Data.Hide
+	local NoAnimation = Data.NoAnimation
+	local NoAutomaticSize = Data.NoAutomaticSize
+	local Rotations = Data.IconRotations
+	local Completed = Data.Completed
+
+	--// Apply base properties
+	if not NoAutomaticSize then
+		Resize.AutomaticSize = Enum.AutomaticSize.None
+	end
+	if not Collapsed then
+		Hide.Visible = true
+	end
+
+	--// Build and play animation keyframes
+	self:HeaderCollapseToggle({
+		Tweeninfo = Tweeninfo,
+		Collapsed = Collapsed,
+		NoAnimation = NoAnimation,
+		Toggle = Toggle,
+		Rotations = Rotations
+	})
+
+	local Tween = self:Tween({
+		Tweeninfo = Tweeninfo,
+		NoAnimation = NoAnimation,
+		Object = Resize,
+		StartProperties = {
+			Size = Collapsed and OpenSize or ClosedSize
+		},
+		EndProperties = {
+			Size = Collapsed and ClosedSize or OpenSize
+		},
+		Completed = function()
+			Hide.Visible = not Collapsed
+
+			--// Invoke completed callback function
+			if Completed then 
+				Completed() 
+			end
+
+			--// Reset AutomaticSize after animation
+			if Collapsed then return end
+			if NoAutomaticSize then return end
+
+			--// Reset sizes of the object
+			Resize.Size = UDim2.fromScale(1, 0)
+			Resize.AutomaticSize = Enum.AutomaticSize.Y
+		end,
+	})
+
+	return Tween
+end
+
+return Animation
 end
 
 Modules['classes.Signaling'] = function()
--- ERROR: File not found: C:\Users\sungf\OneDrive\เดสก์ท็อป\Dear-ReGui-main (2)\Dear-ReGui-main\classes\Signaling.lua
+--// Signal service
+type SignalClass = {
+	Connections: {
+		[number]: (...any) -> nil	
+	},
+	Fire: (SignalClass, ...any) -> nil,
+	GetConnections: (SignalClass) -> table,
+	Connect: (SignalClass, (...any) -> nil) -> table,
+	DisconnectConnections: (SignalClass) -> nil,
+}
 
+type table = {
+    [any]: any
+}
+
+local Signal = {} :: SignalClass
+Signal.__index = Signal
+
+local Wrappers = Modules.load("classes.Wrappers")
+
+function Signal:Fire(...)
+	local Connections = self:GetConnections()
+	if #Connections <= 0 then return end
+
+	for _, Connection in next, Connections do
+		Connection(...)
+	end
+end
+function Signal:GetConnections(): table
+	local Connections = self.Connections
+	return Connections
+end
+function Signal:Connect(Func: (...any) -> nil)
+	local Connections = self:GetConnections()
+	table.insert(Connections, Func)
+end
+function Signal:DisconnectConnections()
+	local Connections = self:GetConnections()
+	table.clear(Connections)
+end
+
+function Signal:NewSignal(): SignalClass
+	return Wrappers:NewClass(Signal, {
+		Connections = {}
+	})
+end
+
+return Signal
 end
 
 Modules['src.Demo Window'] = function()
@@ -3375,28 +3825,808 @@ end
 end
 
 Modules['config.Icons'] = function()
--- ERROR: File not found: C:\Users\sungf\OneDrive\เดสก์ท็อป\Dear-ReGui-main (2)\Dear-ReGui-main\config\Icons.lua
-
+return {
+	Dot = "rbxasset://textures/whiteCircle.png",
+	Arrow = "rbxasset://textures/ui/AvatarContextMenu_Arrow.png", -- textures\ui\Backpack\ScrollDownArrow.png"
+	Close = "rbxasset://textures/loading/cancelButton.png", -- \textures\ui\ScreenshotHud\Close@3x.png" \textures\loading\cancelButton.png"
+	Checkmark = "rbxasset://textures/ui/Lobby/Buttons/nine_slice_button.png",
+	Cat = "rbxassetid://16211812161",
+	Script = "rbxassetid://11570895459",
+	Settings = "rbxassetid://9743465390",
+	Info = "rbxassetid://18754976792",
+	Move = "rbxassetid://6710235139",
+	Roblox = "rbxassetid://7414445494",
+	Warning = "rbxassetid://11745872910",
+	Audio = "rbxassetid://302250236",
+	Shop = "rbxassetid://6473525198",
+	CharacterDance = "rbxassetid://11932783331",
+	Pants = "rbxassetid://10098755331",
+	Home = "rbxassetid://4034483344",
+	Robux = "rbxassetid://5986143282",
+	Badge = "rbxassetid://16170504068",
+	SpawnLocation = "rbxassetid://6400507398",
+	Sword = "rbxassetid://7485051715",
+	Clover = "rbxassetid://11999300014",
+	Star = "rbxassetid://3057073083",
+	Code = "rbxassetid://11348555035",
+	Paw = "rbxassetid://13001190533",
+	Shield = "rbxassetid://7461510428",
+	Shield2 = "rbxassetid://7169354142",
+	File = "rbxassetid://7276823330",
+	Book = "rbxassetid://16061686835",
+	Location = "rbxassetid://13549782519",
+	Puzzle = "rbxassetid://8898417863",
+	Discord = "rbxassetid://84828491431270",
+	Premium = "rbxassetid://6487178625",
+	Friend = "rbxassetid://10885655986",
+	User = "rbxassetid://18854794412",
+	Duplicate = "rbxassetid://11833749507",
+	ChatBox = "rbxassetid://15839118471",
+	ChatBox2 = "rbxassetid://15839116089",
+	Devices = "rbxassetid://4458812712",
+	Weight = "rbxassetid://9855685269",
+	Image = "rbxassetid://123311808092347",
+	Profile = "rbxassetid://13585614795",
+	Admin = "rbxassetid://11656483170",
+	PaintBrush = "rbxassetid://12111879608",
+	Speed = "rbxassetid://12641434961",
+	NoConnection = "rbxassetid://9795340967",
+	Connection = "rbxassetid://119759670842477",
+	Globe = "rbxassetid://18870359747",
+	Box = "rbxassetid://140217940575618",
+	Crown = "rbxassetid://18826490498",
+	Control = "rbxassetid://18979524646",
+	Send = "rbxassetid://18940312887",
+	FastForward = "rbxassetid://112963221295680",
+	Pause = "rbxassetid://109949100737970",
+	Reload = "rbxassetid://11570018242",
+	Joystick = "rbxassetid://18749336354",
+	Controller = "rbxassetid://11894535915",
+	Lock = "rbxassetid://17783082088",
+	Calculator = "rbxassetid://85861816563977",
+	Sun = "rbxassetid://13492317832",
+	Moon = "rbxassetid://8498174594",
+	Prohibited = "rbxassetid://5248916036",
+	Flag = "rbxassetid://251346532",
+	Website = "rbxassetid://98455290625865",
+	Telegram = "rbxassetid://115860270107061",
+	MusicNote = "rbxassetid://18187351229",
+	Music = "rbxassetid://253830398",
+	Headphones = "rbxassetid://1311321471",
+	Phone = "rbxassetid://8411963035",
+	Smartphone = "rbxassetid://14040313879",
+	Desktop = "rbxassetid://3120635703",
+	Desktop2 = "rbxassetid://4728059490",
+	Laptop = "rbxassetid://4728059725",
+	Server = "rbxassetid://9692125126",
+	Wedge = "rbxassetid://9086583059",
+	Drill = "rbxassetid://11959189471",
+	Character = "rbxassetid://13285102351",
+}
 end
 
 Modules['config.Accent'] = function()
--- ERROR: File not found: C:\Users\sungf\OneDrive\เดสก์ท็อป\Dear-ReGui-main (2)\Dear-ReGui-main\config\Accent.lua
+return {
+	--// ReGui acent colors
+	Light = Color3.fromRGB(50, 150, 250),
+	Dark = Color3.fromRGB(30, 66, 115),
+	ExtraDark = Color3.fromRGB(28, 39, 53),
+	White = Color3.fromRGB(240, 240, 240),
+	Gray = Color3.fromRGB(172, 171, 175),
+	Black = Color3.fromRGB(15, 19, 24),
+	Yellow = Color3.fromRGB(230, 180, 0),
+	Orange = Color3.fromRGB(230, 150, 0),
+	Green = Color3.fromRGB(130, 188, 91),
+	Red = Color3.fromRGB(255, 69, 69),
 
+	--// ImGui acent colors
+	ImGui = {
+		Light = Color3.fromRGB(66, 150, 250),
+		Dark = Color3.fromRGB(41, 74, 122),
+		Black = Color3.fromRGB(15, 15, 15),
+		Gray = Color3.fromRGB(36, 36, 36)
+	}
+}
 end
 
 Modules['config.Themes'] = function()
--- ERROR: File not found: C:\Users\sungf\OneDrive\เดสก์ท็อป\Dear-ReGui-main (2)\Dear-ReGui-main\config\Themes.lua
+type ThemeData = {
+	[string]: any
+}
 
+local Accent = Modules.load("config.Accent")
+local ThemeConfigs = {}
+
+ThemeConfigs.DarkTheme = {
+	Values = {
+		AnimationTweenInfo = TweenInfo.new(0.08),
+		TextFont = Font.fromEnum(Enum.Font.RobotoMono),
+		TextSize = 14,
+		Text = Accent.White,
+		TextDisabled = Accent.Gray,
+		ErrorText = Accent.Red,
+
+		FrameBg = Accent.Dark,
+		FrameBgTransparency = 0.4,
+		FrameBgActive = Accent.Light,
+		FrameBgTransparencyActive = 0.4,
+		FrameRounding = UDim.new(0, 0),
+
+		--// Elements
+		SliderGrab = Accent.Light,
+		ButtonsBg = Accent.Light,
+		CollapsingHeaderBg = Accent.Light,
+		CollapsingHeaderText = Accent.White,
+		CheckMark = Accent.Light,
+		ResizeGrab = Accent.Light,
+		HeaderBg = Accent.Gray,
+		HeaderBgTransparency = 0.7,
+		HistogramBar = Accent.Yellow,
+		ProgressBar = Accent.Yellow,
+		RegionBg = Accent.Dark,
+		RegionBgTransparency = 0.1,
+		Separator = Accent.Gray,
+		SeparatorTransparency = 0.5,
+		ConsoleLineNumbers = Accent.White,
+		LabelPaddingTop = UDim.new(0, 0),
+		LabelPaddingBottom = UDim.new(0, 0),
+		MenuBar = Accent.ExtraDark,
+		MenuBarTransparency = 0.1,
+		PopupCanvas = Accent.Black,
+
+		--// TabSelector
+		TabTextPaddingTop = UDim.new(0, 3),
+		TabTextPaddingBottom = UDim.new(0, 8),
+		TabText = Accent.Gray,
+		TabBg = Accent.Dark,
+		TabTextActive = Accent.White,
+		TabBgActive = Accent.Light,
+		TabsBarBg = Color3.fromRGB(36, 36, 36),
+		TabsBarBgTransparency = 1,
+		TabPagePadding = UDim.new(0, 8),
+
+		--// Window
+		ModalWindowDimBg = Color3.fromRGB(230, 230, 230),
+		ModalWindowDimTweenInfo = TweenInfo.new(0.2),
+
+		WindowBg = Accent.Black,
+		WindowBgTransparency = 0.05,
+
+		Border = Accent.Gray,
+		BorderTransparency = 0.8,
+		BorderTransparencyActive = 0.5,
+
+		Title = Accent.White,
+		TitleAlign = Enum.TextXAlignment.Left,
+		TitleBarBg = Accent.Black,
+		TitleBarTransparency = 0,
+		TitleActive = Accent.White,
+		TitleBarBgActive = Accent.Dark,
+		TitleBarTransparencyActive = 0.05,
+		TitleBarBgCollapsed = Color3.fromRGB(0, 0, 0),
+		TitleBarTransparencyCollapsed = 0.6,
+	}
+}
+ThemeConfigs.LightTheme = {
+	BaseTheme = ThemeConfigs.DarkTheme,
+	Values = {
+		Text = Accent.Black,
+		TextFont = Font.fromEnum(Enum.Font.Ubuntu),
+		TextSize = 14,
+
+		FrameBg = Accent.Gray,
+		FrameBgTransparency = 0.4,
+		FrameBgActive = Accent.Light,
+		FrameBgTransparencyActive = 0.6,
+
+		SliderGrab = Accent.Light,
+		ButtonsBg = Accent.Light,
+		CollapsingHeaderText = Accent.Black,
+		Separator = Accent.Black,
+		ConsoleLineNumbers = Accent.Yellow,
+		MenuBar = Color3.fromRGB(219, 219, 219),
+		PopupCanvas = Accent.White,
+
+		TabText = Accent.Black,
+		TabTextActive = Accent.Black,
+
+		WindowBg = Accent.White,
+		Border = Accent.Gray,
+		ResizeGrab = Accent.Gray,
+
+		Title = Accent.Black,
+		TitleAlign = Enum.TextXAlignment.Center,
+		TitleBarBg = Accent.Gray,
+		TitleActive = Accent.Black,
+		TitleBarBgActive = Color3.fromRGB(186, 186, 186),
+		TitleBarBgCollapsed = Accent.Gray
+	}
+}
+ThemeConfigs.ImGui = {
+	BaseTheme = ThemeConfigs.DarkTheme,
+	Values = {
+		AnimationTweenInfo = TweenInfo.new(0),
+		Text = Color3.fromRGB(255, 255, 255),
+
+		FrameBg = Accent.ImGui.Dark,
+		FrameBgTransparency = 0.4,
+		FrameBgActive = Accent.ImGui.Light,
+		FrameBgTransparencyActive = 0.5,
+		FrameRounding = UDim.new(0, 0),
+
+		ButtonsBg = Accent.ImGui.Light,
+		CollapsingHeaderBg = Accent.ImGui.Light,
+		CollapsingHeaderText = Accent.White,
+		CheckMark = Accent.ImGui.Light,
+		ResizeGrab = Accent.ImGui.Light,
+		MenuBar = Accent.ImGui.Gray,
+		MenuBarTransparency = 0,
+		PopupCanvas = Accent.ImGui.Black,
+
+		TabText = Accent.Gray,
+		TabBg = Accent.ImGui.Dark,
+		TabTextActive = Accent.White,
+		TabBgActive = Accent.ImGui.Light,
+
+		WindowBg = Accent.ImGui.Black,
+		WindowBgTransparency = 0.05,
+		Border = Accent.Gray,
+		BorderTransparency = 0.7,
+		BorderTransparencyActive = 0.4,
+
+		Title = Accent.White,
+		TitleBarBg = Accent.ImGui.Black,
+		TitleBarTransparency = 0,
+		TitleBarBgActive = Accent.ImGui.Dark,
+		TitleBarTransparencyActive = 0,
+	}
+}
+
+return ThemeConfigs
 end
 
 Modules['config.Flags'] = function()
--- ERROR: File not found: C:\Users\sungf\OneDrive\เดสก์ท็อป\Dear-ReGui-main (2)\Dear-ReGui-main\config\Flags.lua
+--// Global flags for styling
+
+type table = {
+    [any]: any
+}
+type FlagFunc = {
+	Data: {
+		Class: {},
+		WindowClass: table?
+	},
+	Object: GuiObject
+}
+
+local Wrappers = Modules.load("classes.Wrappers")
+local ReGui = nil
+
+Wrappers:AddOnInit(function(self)
+	ReGui = self
+end)
+
+return {
+	{
+		Properties = {"Center"},
+		Callback = function<FlagFunc>(Data, Object, Value)
+			local Position = Object.Position
+			Wrappers:SetProperties(Object, {
+				Position = UDim2.new(
+					Value:find("X") and 0.5 or Position.X.Scale,
+					Position.X.Offset,
+					Value:find("Y") and 0.5 or Position.Y.Scale,
+					Position.Y.Offset
+				),
+				AnchorPoint = Vector2.new(
+					Value:find("X") and 0.5 or 0,
+					Value:find("Y") and 0.5 or 0
+				)
+			})
+		end,
+	},
+	{
+		Properties = {"ElementStyle"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			ReGui:ApplyStyle(Object, Value)
+		end,
+	},
+	{
+		Properties = {"ColorTag"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			local Class = Data.Class
+			local WindowClass = Data.WindowClass
+			local NoAutoTheme = Class.NoAutoTheme
+
+			--// Check if theming is enabled
+			if not WindowClass then return end
+			if NoAutoTheme then return end
+
+			ReGui:UpdateColors({
+				Object = Object,
+				Tag = Value,
+				NoAnimation = true,
+				Theme = WindowClass.Theme,
+			})
+		end,
+	},
+	{
+		Properties = {"Animation"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			--// Check if animations are disabled
+			local NoAnimation = Data.Class.NoAnimation
+			if NoAnimation then return end
+
+			ReGui:SetAnimation(Object, Value)
+		end,
+	},
+	{
+		Properties = {"Image"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			local WindowClass = Data.WindowClass
+			Object.Image = Wrappers:CheckAssetUrl(Value)
+			ReGui:DynamicImageTag(Object, Value, WindowClass)
+		end,
+	},
+	{
+		Properties = {"Icon", "IconSize", "IconRotation", "IconPadding"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			--// Locate icon element
+			local Icon = Object:FindFirstChild("Icon", true)
+			if not Icon then 
+                ReGui:Warn("No icon for", Object) 
+				return
+			end 
+
+			--// Check class data for missing values
+			local Class = Data.Class
+			Wrappers:CheckConfig(Class, {
+				Icon = "",
+				IconSize = UDim2.fromScale(1,1),
+				IconRotation = 0,
+				IconPadding = UDim2.new(0, 2)
+			})
+
+			--// Apply icon padding
+			local Padding = Icon.Parent:FindFirstChild("UIPadding")
+			Wrappers:SetPadding(Padding, Class.IconPadding)
+
+			--// Check image asset url
+			local Image = Class.Icon
+			Image = Wrappers:CheckAssetUrl(Image)
+
+			--// Dynamic image
+			local WindowClass = Data.WindowClass
+			ReGui:DynamicImageTag(Icon, Image, WindowClass)
+			Wrappers:SetProperties(Icon, {
+				Visible = Icon ~= "",
+				Image = Wrappers:CheckAssetUrl(Image),
+				Size = Class.IconSize,
+				Rotation = Class.IconRotation
+			})
+		end,
+	},
+	{
+		Properties = {"BorderThickness", "Border", "BorderColor"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			local Class = Data.Class
+			local Enabled = Class.Border == true
+
+			Wrappers:CheckConfig(Class, {
+				BorderTransparency = Data:GetThemeKey("BorderTransparencyActive"),
+				BorderColor = Data:GetThemeKey("Border"),
+				BorderThickness = 1,
+				BorderStrokeMode = Enum.ApplyStrokeMode.Border,
+			})
+
+			--// Apply properties to UIStroke
+			local Stroke = Wrappers:GetChildOfClass(Object, "UIStroke")
+			Wrappers:SetProperties(Stroke, {
+				Transparency = Class.BorderTransparency,
+				Thickness = Class.BorderThickness,
+				Color = Class.BorderColor,
+				ApplyStrokeMode = Class.BorderStrokeMode,
+				Enabled = Enabled
+			})
+		end,
+	},
+	{
+		Properties = {"Ratio"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			local Class = Data.Class
+
+			Wrappers:CheckConfig(Class, {
+				Ratio = 4/3,
+				RatioAxis = Enum.DominantAxis.Height,
+				RatioAspectType = Enum.AspectType.ScaleWithParentSize
+			})
+
+			--// Unpack data
+			local AspectRatio = Class.Ratio
+			local Axis = Class.RatioAxis
+			local AspectType = Class.RatioAspectType
+
+			local Ratio = Wrappers:GetChildOfClass(Object, "UIAspectRatioConstraint")
+			Wrappers:SetProperties(Ratio, {
+				DominantAxis = Axis,
+				AspectType = AspectType,
+				AspectRatio = AspectRatio
+			})
+		end,
+	},
+	{
+		Properties = {"FlexMode"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			local FlexItem = Wrappers:GetChildOfClass(Object, "UIFlexItem")
+			FlexItem.FlexMode = Value
+		end,
+	},
+	{
+		--Recursive = true,
+		Properties = {"CornerRadius"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			local UICorner = Wrappers:GetChildOfClass(Object, "UICorner")
+			UICorner.CornerRadius = Value
+		end,
+	},
+	{
+		Properties = {"Fill"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			if Value ~= true then return end
+
+			local Class = Data.Class
+			Wrappers:CheckConfig(Class, {
+				Size = UDim2.fromScale(1, 1),
+				UIFlexMode = Enum.UIFlexMode.Fill,
+				AutomaticSize = Enum.AutomaticSize.None
+			})
+
+			--// Create FlexLayout property
+			local Flex = Wrappers:GetChildOfClass(Object, "UIFlexItem")
+			Flex.FlexMode = Class.UIFlexMode
+
+			Object.Size = Class.Size
+			Object.AutomaticSize = Class.AutomaticSize
+		end,
+	},
+	{
+		Properties = {"Label"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+            local Class = Data.Class
+
+			local Label = Object:FindFirstChild("Label")
+			if not Label then return end
+			
+            Label.Text = tostring(Value)
+
+			function Class:SetLabel(Text)
+				Label.Text = Text
+				return self
+			end
+		end,
+	},
+	{
+		Properties = {"NoGradient"},
+		WindowProperties = {"NoGradients"},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			local UIGradient = Object:FindFirstChildOfClass("UIGradient")
+			if not UIGradient then return end
+
+			UIGradient.Enabled = Value
+		end,
+	},
+	{
+		Properties = {
+			"UiPadding", 
+			"PaddingBottom", 
+			"PaddingTop",
+			"PaddingRight", 
+			"PaddingTop"
+		},
+		Callback = function<StyleFunc>(Data, Object, Value)
+			Value = Value or 0
+
+			--// Convert number value into a UDim
+			if typeof(Value) == "number" then
+				Value = UDim.new(0, Value)
+			end
+
+			local Class = Data.Class
+
+			local IsUiPadding = Class.UiPadding
+			if IsUiPadding then
+				Wrappers:CheckConfig(Class, {
+					PaddingBottom = Value,
+					PaddingLeft = Value,
+					PaddingRight = Value,
+					PaddingTop = Value,
+				})
+			end
+
+			local UIPadding = Wrappers:GetChildOfClass(Object, "UIPadding")
+			Wrappers:SetProperties(UIPadding, {
+				PaddingBottom = Class.PaddingBottom,
+				PaddingLeft = Class.PaddingLeft,
+				PaddingRight = Class.PaddingRight,
+				PaddingTop = Class.PaddingTop,
+			})
+		end,
+	},
+	{
+		Properties = {"Callback"},
+		Callback = function<StyleFunc>(Data, Object)
+			local Class = Data.Class
+
+			function Class:SetCallback(NewCallback)
+				self.Callback = NewCallback
+				return self
+			end
+			function Class:FireCallback(NewCallback)
+				self.Callback(Object)
+				return self
+			end
+		end,
+	},
+	{
+		Properties = {"Value"},
+		Callback = function<StyleFunc>(Data, Object)
+			local Class = Data.Class
+			Wrappers:CheckConfig(Class, {
+				GetValue = function(self)
+					return Class.Value
+				end,
+			})
+		end
+	}
+}
 
 end
 
 Modules['config.Tagging'] = function()
--- ERROR: File not found: C:\Users\sungf\OneDrive\เดสก์ท็อป\Dear-ReGui-main (2)\Dear-ReGui-main\config\Tagging.lua
+local Tags = {}
 
+Tags.Coloring = {
+	["MenuBar"] = {
+		BackgroundColor3 = "MenuBar",
+		BackgroundTransparency = "MenuBarTransparency",
+	},
+	["FrameRounding"] = {
+		CornerRadius = "FrameRounding"
+	},
+	["PopupCanvas"] = {
+		BackgroundColor3 = "PopupCanvas"
+	},
+	["ModalWindowDim"] = {
+		BackgroundColor3 = "ModalWindowDimBg"
+	},
+	["Selectable"] = "Button",
+	["MenuButton"] = "Button",
+	["Separator"] = {
+		BackgroundColor3 = "Separator",
+		BackgroundTransparency = "SeparatorTransparency",
+	},
+	["Region"] = {
+		BackgroundColor3 = "RegionBg",
+		BackgroundTransparency = "RegionBgTransparency",
+	},
+	["Label"] = {
+		TextColor3 = "Text",
+		FontFace = "TextFont",
+		TextSize = "TextSize",
+	},
+	["ImageFollowsText"] = {
+		ImageColor3 = "Text",
+	},
+	["ConsoleLineNumbers"] = {
+		TextColor3 = "ConsoleLineNumbers",
+		FontFace = "TextFont",
+		TextSize = "TextSize",
+	},
+	["ConsoleText"] = "Label",
+	["LabelDisabled"] = {
+		TextColor3 = "TextDisabled",
+		FontFace = "TextFont",
+		TextSize = "TextSize",
+	},
+	["Plot"] = {
+		BackgroundColor3 = "HistogramBar",
+	},
+	["Header"] = {
+		BackgroundColor3 = "HeaderBg",
+		BackgroundTransparency = "HeaderBgTransparency",
+	},
+	["WindowTitle"] = {
+		TextXAlignment = "TitleAlign",
+		FontFace = "TextFont",
+		TextSize = "TextSize",
+	},
+	["TitleBar"] = {
+		BackgroundColor3 = "TitleBarBgActive"
+	},
+	["Window"] = {
+		BackgroundColor3 = "WindowBg",
+		BackgroundTransparency = "WindowBgTransparency"
+	},
+	["TitleBarBgCollapsed"] = {
+		BackgroundColor3 = "TitleBarBgCollapsed",
+		BackgroundTransparency = "TitleBarTransparencyCollapsed"
+	},
+	["TitleBarBgActive"] = {
+		BackgroundColor3 = "TitleBarBgActive",
+		BackgroundTransparency = "TitleBarTransparencyActive"
+	},
+	["TitleBarBg"] = {
+		BackgroundColor3 = "TitleBarBg",
+		BackgroundTransparency = "TitleBarTransparency"
+	},
+	["TabsBar"] = {
+		BackgroundColor3 = "TabsBarBg",
+		BackgroundTransparency = "TabsBarBgTransparency",
+	},
+	["Border"] = {
+		Color = "Border",
+		Transparency = "BorderTransparency"
+	},
+	["ResizeGrab"] = {
+		TextColor3 = "ResizeGrab"
+	},
+	["BorderActive"] = {
+		Transparency = "BorderTransparencyActive"
+	},
+	["Frame"] = {
+		BackgroundColor3 = "FrameBg",
+		BackgroundTransparency = "FrameBgTransparency",
+		TextColor3 = "Text",
+		FontFace = "TextFont",
+		TextSize = "TextSize",
+	},
+	["FrameActive"] = {
+		BackgroundColor3 = "FrameBgActive",
+		BackgroundTransparency = "FrameBgTransparencyActive"
+	},
+	["SliderGrab"] = {
+		BackgroundColor3 = "SliderGrab"
+	},
+	["Button"] = {
+		BackgroundColor3 = "ButtonsBg",
+		TextColor3 = "Text",
+		FontFace = "TextFont",
+		TextSize = "TextSize",
+	},
+	["CollapsingHeader"] = {
+		FontFace = "TextFont",
+		TextSize = "TextSize",
+		TextColor3 = "CollapsingHeaderText",
+		BackgroundColor3 = "CollapsingHeaderBg",
+	},
+	["Checkbox"] = {
+		BackgroundColor3 = "FrameBg",
+	},
+	["CheckMark"] = {
+		ImageColor3 = "CheckMark",
+		BackgroundColor3 = "CheckMark",
+	},
+	["RadioButton"] = {
+		BackgroundColor3 = "ButtonsBg",
+		TextColor3 = "Text",
+		FontFace = "TextFont",
+		TextSize = "TextSize"
+	}
+}
+
+Tags.Styles = {
+	RadioButton = {
+		Animation = "RadioButtons",
+		CornerRadius = UDim.new(1, 0),
+	},
+	Button = {
+		Animation = "Buttons"
+	},
+	CollapsingHeader = {
+		Animation = "Buttons"
+	},
+	TreeNode = {
+		Animation = "TransparentButtons"
+	},
+	TransparentButton = {
+		Animation = "TransparentButtons"
+	}
+}
+
+Tags.Animations = {
+	["Invisible"] = {
+		Connections = {
+			MouseEnter = {
+				Visible = true,
+			},
+			MouseLeave = {
+				Visible = false,
+			}
+		},
+		Init = "MouseLeave"
+	},
+	["Buttons"] = {
+		Connections = {
+			MouseEnter = {
+				BackgroundTransparency = 0.3,
+			},
+			MouseLeave = {
+				BackgroundTransparency = 0.7,
+			}
+		},
+		Init = "MouseLeave"
+	},
+	["TextButtons"] = {
+		Connections = {
+			MouseEnter = {
+				TextTransparency = 0.3,
+			},
+			MouseLeave = {
+				TextTransparency = 0.7,
+			}
+		},
+		Init = "MouseLeave"
+	},
+	["TransparentButtons"] = {
+		Connections = {
+			MouseEnter = {
+				BackgroundTransparency = 0.3,
+			},
+			MouseLeave = {
+				BackgroundTransparency = 1,
+			}
+		},
+		Init = "MouseLeave"
+	},
+	["RadioButtons"] = {
+		Connections = {
+			MouseEnter = {
+				BackgroundTransparency = 0.5,
+			},
+			MouseLeave = {
+				BackgroundTransparency = 1,
+			}
+		},
+		Init = "MouseLeave"
+	},
+	["Inputs"] = {
+		Connections = {
+			MouseEnter = {
+				BackgroundTransparency = 0,
+			},
+			MouseLeave = {
+				BackgroundTransparency = 0.5,
+			},
+		},
+		Init = "MouseLeave"
+	},
+	["Plots"] = {
+		Connections = {
+			MouseEnter = {
+				BackgroundTransparency = 0.3,
+			},
+			MouseLeave = {
+				BackgroundTransparency = 0,
+			},
+		},
+		Init = "MouseLeave"
+	},
+	["Border"] = {
+		Connections = {
+			Selected = {
+				Transparency = 0,
+				Thickness = 1
+			},
+			Deselected = {
+				Transparency = 0.7,
+				Thickness = 1
+			}
+		},
+		Init = "Selected"
+	},
+}
+
+return Tags
 end
 
 -- Load function
@@ -3410,8 +4640,8 @@ function Modules.load(moduleName)
     end
     return Modules.cache[moduleName]
 end
-
--- Main Code
+-- Main Code (wrapped in function for loadstring)
+return (function()
 --[[
 
       _       ,-'REGUI`-._
@@ -3701,17 +4931,55 @@ function ReGui:Init(Overwrites: table?)
 end
 
 function ReGui:CheckImportState()
-	--// Check if the library has already initalised
-	if self.Initialised then return end
-
-	--// Import prefabs
+	local fileName = "ReGui-Prefabs.rbxm"
+	
+	-- เช็คว่ามีไฟล์ Prefabs ที่เซฟไว้หรือไม่
+	if isfile and isfile(fileName) then
+		warn("[ReGui] พบไฟล์ Prefabs ที่เซฟไว้ กำลังโหลด...")
+		
+		local success, result = pcall(function()
+			local customAsset = getcustomasset(fileName)
+			return game:GetObjects(customAsset)[1]
+		end)
+		
+		if success and result then
+			warn("[ReGui] โหลด Prefabs จากไฟล์สำเร็จ!")
+			self:Init({ Prefabs = result })
+			return
+		else
+			warn("[ReGui] ไฟล์เสีย กำลังลบและโหลดใหม่...")
+			delfile(fileName)
+		end
+	end
+	
+	-- ถ้าไม่มีไฟล์ ให้โหลดจาก LoadLocalAsset (ครั้งแรกเท่านั้น)
+	warn("[ReGui] กำลังโหลด Prefabs ใหม่จาก LoadLocalAsset...")
 	local PrefabsId = self.PrefabsId
 	local PrefabsAssetUrl = Wrappers:CheckAssetUrl(PrefabsId)
 	local Success, Prefabs = pcall(function()
 		return Wrappers:NewReference(InsertService:LoadLocalAsset(PrefabsAssetUrl))
 	end)
+	
+	if Success and Prefabs then
+		-- เซฟเป็นไฟล์เพื่อใช้ครั้งต่อไป (ไม่ต้องโหลดจาก LoadLocalAsset อีก!)
+		if writefile and saveinstance then
+			local saveSuccess = pcall(function()
+				saveinstance({
+					Instance = Prefabs,
+					SavePath = fileName,
+					SaveBinary = true
+				})
+			end)
+			
+			if saveSuccess then
+				warn("[ReGui] เซฟ Prefabs เป็นไฟล์สำเร็จ! ครั้งต่อไปจะโหลดจากไฟล์")
+			else
+				warn("[ReGui] ไม่สามารถเซฟไฟล์ได้ (executor อาจไม่รองรับ saveinstance)")
+			end
+		end
+	end
 
-	--// Automatically load ReGui
+	-- Automatically load ReGui
 	self:Init({
 		Prefabs = Success and Prefabs or nil
 	})
@@ -10197,3 +11465,4 @@ GenerateCFrameInput("SliderCFrame", "SliderInt3")
 GenerateCFrameInput("DragCFrame", "DragInt3")
 
 return ReGui
+end)()
