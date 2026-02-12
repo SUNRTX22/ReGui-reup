@@ -4997,7 +4997,13 @@ function ReGui:CheckImportState()
 	--// Step 1: Try loading cached Prefabs from getgenv
 	local genvSuccess, genvPrefabs = pcall(function()
 		if getgenv and getgenv().__ReGuiCachedPrefabs then
-			return getgenv().__ReGuiCachedPrefabs
+            local cached = getgenv().__ReGuiCachedPrefabs
+            -- Validate cached instance
+            if typeof(cached) == "Instance" then
+                -- Check if it's not destroyed (Parent check or try to clone)
+                local s, r = pcall(function() return cached.Parent end)
+                if s then return cached end
+            end
 		end
 		return nil
 	end)
@@ -5042,12 +5048,12 @@ function ReGui:CheckImportState()
 			-- Save to file for next time
 			pcall(function()
 				if writefile and saveinstance then
-					saveinstance({
-						Instance = Prefabs,
-						SavePath = fileName,
-						SaveBinary = true
-					})
-					warn("[ReGui] Saved Prefabs to file for future use!")
+					-- saveinstance({
+					-- 	Instance = Prefabs,
+					-- 	SavePath = fileName,
+					-- 	SaveBinary = true
+					-- })
+					-- warn("[ReGui] Saved Prefabs to file for future use!")
 				end
 			end)
 		else
