@@ -4690,6 +4690,7 @@ local ReGui = {
 	--// Collections
 	_FlagCache = {},
 	_ErrorCache = {},
+	_Connections = {},
 	Windows = {},
 	ActiveTooltips = {},
 	IniSettings = {},
@@ -4846,11 +4847,43 @@ function ReGui:StyleContainers()
 	})
 end
 
+function ReGui:Destroy()
+	--// Disconnect all stored connections
+	local Connections = self._Connections
+	if Connections then
+		for _, Connection in next, Connections do
+			if typeof(Connection) == "RBXScriptConnection" then
+				Connection:Disconnect()
+			end
+		end
+		table.clear(Connections)
+	end
+
+	--// Destroy the container
+	local Container = self.Container
+	if Container then
+		pcall(function()
+			Container:Destroy()
+		end)
+	end
+
+	--// Reset state
+	self.Initialised = false
+	self.Container = nil
+	self.TooltipsContainer = nil
+	self.FocusedWindow = nil
+	self.Windows = {}
+	self.ActiveTooltips = {}
+end
+
 function ReGui:Init(Overwrites: table?)
 	Overwrites = Overwrites or {}
 
 	--// Check if the library has already initalised
 	if self.Initialised then return end
+
+	--// Cleanup previous instance if re-executing
+	self:Destroy()
 
 	--// Merge overwrites
 	Merge(self, Overwrites)
@@ -4860,13 +4893,27 @@ function ReGui:Init(Overwrites: table?)
 		HasTouchScreen = self:IsMobileDevice(),
 	})
 
+	--// Validate Prefabs before proceeding
+	if not self.Prefabs then
+		--// Try loading Prefabs
+		self:CheckConfig(self, {
+			Prefabs = function()
+				return self:LoadPrefabs()
+			end,
+		}, true)
+		
+		--// If still nil, abort initialization
+		if not self.Prefabs then
+			self.Initialised = false
+			self:Warn("Failed to load Prefabs! Cannot initialize.")
+			return
+		end
+	end
+
 	--// Fetch folders
 	self:CheckConfig(self, {
 		ContainerParent = function()
 			return Wrappers:ResolveUIParent()
-		end,
-		Prefabs = function()
-			return self:LoadPrefabs()
 		end,
 	}, true)
 
@@ -4882,6 +4929,12 @@ function ReGui:Init(Overwrites: table?)
 
 	--// Containers
 	local Container = self.Container
+	if not Container then
+		self.Initialised = false
+		self:Warn("Failed to create Container! Cannot initialize.")
+		return
+	end
+
 	local TooltipOffset = self.TooltipOffset
 	local ActiveTooltips = self.ActiveTooltips
 	local Overlays = Container.Overlays
@@ -4894,8 +4947,8 @@ function ReGui:Init(Overwrites: table?)
 		Parent = Overlays
 	})
 
-	--// Key press
-	UserInputService.InputBegan:Connect(function(Input: InputObject)
+	--// Key press (store connection for cleanup)
+	local InputBeganConn = UserInputService.InputBegan:Connect(function(Input: InputObject)
 		if not self:IsMouseEvent(Input, true) then return end
 
 		local ClickTick = tick()
@@ -4908,9 +4961,12 @@ function ReGui:Init(Overwrites: table?)
 		--// WindowActiveStates
 		self:UpdateWindowFocuses()
 	end)
+	table.insert(self._Connections, InputBeganConn)
 
 	local function InputUpdate()
 		local Tooltips = self.TooltipsContainer
+		if not Tooltips then return end
+		
 		local Visible = #ActiveTooltips > 0
 		Tooltips.Visible = Visible
 
@@ -4926,62 +4982,104 @@ function ReGui:Init(Overwrites: table?)
 		)
 	end
 
-	--// Bind events
-	RunService.RenderStepped:Connect(InputUpdate)
+	--// Bind events (store connection for cleanup)
+	local RenderConn = RunService.RenderStepped:Connect(InputUpdate)
+	table.insert(self._Connections, RenderConn)
 end
 
 function ReGui:CheckImportState()
+	--// Already initialised, skip
+	if self.Initialised then return end
+
 	local fileName = "ReGui-Prefabs.rbxm"
-	
-	-- เช็คว่ามีไฟล์ Prefabs ที่เซฟไว้หรือไม่
-	if isfile and isfile(fileName) then
-		warn("[ReGui] พบไฟล์ Prefabs ที่เซฟไว้ กำลังโหลด...")
-		
-		local success, result = pcall(function()
-			local customAsset = getcustomasset(fileName)
-			return game:GetObjects(customAsset)[1]
+	local Prefabs = nil
+
+	--// Step 1: Try loading cached Prefabs from getgenv
+	local genvSuccess, genvPrefabs = pcall(function()
+		if getgenv and getgenv().__ReGuiCachedPrefabs then
+			return getgenv().__ReGuiCachedPrefabs
+		end
+		return nil
+	end)
+	if genvSuccess and genvPrefabs then
+		warn("[ReGui] Loaded Prefabs from memory cache!")
+		Prefabs = genvPrefabs
+	end
+
+	--// Step 2: Try loading from saved file
+	if not Prefabs then
+		local fileSuccess = pcall(function()
+			if isfile and isfile(fileName) then
+				warn("[ReGui] Found saved Prefabs file, loading...")
+				local customAsset = getcustomasset(fileName)
+				Prefabs = game:GetObjects(customAsset)[1]
+			end
 		end)
 		
-		if success and result then
-			warn("[ReGui] โหลด Prefabs จากไฟล์สำเร็จ!")
-			self:Init({ Prefabs = result })
-			return
-		else
-			warn("[ReGui] ไฟล์เสีย กำลังลบและโหลดใหม่...")
-			delfile(fileName)
-		end
-	end
-	
-	-- ถ้าไม่มีไฟล์ ให้โหลดจาก LoadLocalAsset (ครั้งแรกเท่านั้น)
-	warn("[ReGui] กำลังโหลด Prefabs ใหม่จาก LoadLocalAsset...")
-	local PrefabsId = self.PrefabsId
-	local PrefabsAssetUrl = Wrappers:CheckAssetUrl(PrefabsId)
-	local Success, Prefabs = pcall(function()
-		return Wrappers:NewReference(InsertService:LoadLocalAsset(PrefabsAssetUrl))
-	end)
-	
-	if Success and Prefabs then
-		-- เซฟเป็นไฟล์เพื่อใช้ครั้งต่อไป (ไม่ต้องโหลดจาก LoadLocalAsset อีก!)
-		if writefile and saveinstance then
-			local saveSuccess = pcall(function()
-				saveinstance({
-					Instance = Prefabs,
-					SavePath = fileName,
-					SaveBinary = true
-				})
+		if not fileSuccess or not Prefabs then
+			-- File is corrupted, delete it
+			pcall(function()
+				if isfile and isfile(fileName) then 
+					delfile(fileName) 
+				end
 			end)
-			
-			if saveSuccess then
-				warn("[ReGui] เซฟ Prefabs เป็นไฟล์สำเร็จ! ครั้งต่อไปจะโหลดจากไฟล์")
-			else
-				warn("[ReGui] ไม่สามารถเซฟไฟล์ได้ (executor อาจไม่รองรับ saveinstance)")
-			end
+			Prefabs = nil
 		end
 	end
 
-	-- Automatically load ReGui
+	--// Step 3: Try LoadLocalAsset (first time only)
+	if not Prefabs then
+		warn("[ReGui] Loading Prefabs from LoadLocalAsset...")
+		local PrefabsId = self.PrefabsId
+		local PrefabsAssetUrl = Wrappers:CheckAssetUrl(PrefabsId)
+		local Success, Result = pcall(function()
+			return Wrappers:NewReference(InsertService:LoadLocalAsset(PrefabsAssetUrl))
+		end)
+
+		if Success and Result then
+			Prefabs = Result
+			
+			-- Save to file for next time
+			pcall(function()
+				if writefile and saveinstance then
+					saveinstance({
+						Instance = Prefabs,
+						SavePath = fileName,
+						SaveBinary = true
+					})
+					warn("[ReGui] Saved Prefabs to file for future use!")
+				end
+			end)
+		else
+			warn("[ReGui] LoadLocalAsset failed:", Result)
+		end
+	end
+
+	--// Store in getgenv cache for re-execution
+	if Prefabs then
+		pcall(function()
+			if getgenv then
+				getgenv().__ReGuiCachedPrefabs = Prefabs
+			end
+		end)
+	end
+
+	--// Cleanup old container before re-init
+	pcall(function()
+		local parent = (get_hidden_gui and get_hidden_gui()) or (gethui and gethui())
+		if not parent then
+			parent = game:GetService("CoreGui")
+		end
+		local oldContainer = parent:FindFirstChild(self.ContainerName or "ReGui")
+		if oldContainer then
+			oldContainer:Destroy()
+			task.wait(0.05)
+		end
+	end)
+
+	-- Initialize ReGui with Prefabs
 	self:Init({
-		Prefabs = Success and Prefabs or nil
+		Prefabs = Prefabs
 	})
 end
 
@@ -5846,11 +5944,30 @@ end
 
 function ReGui:InsertPrefab(Name: string, Properties): GuiObject
 	local Folder = self.Prefabs
-	local Prefabs = Folder.Prefabs
+	if not Folder then
+		self:Warn("Prefabs folder is nil! Cannot insert:", Name)
+		return nil
+	end
+	
+	local Prefabs = Folder:FindFirstChild("Prefabs") or Folder
+	if not Prefabs then
+		self:Warn("Prefabs container not found! Cannot insert:", Name)
+		return nil
+	end
 
-	local Object = Wrappers:NewReference(
-		Prefabs:WaitForChild(Name):Clone()
-	)
+	--// Use FindFirstChild with timeout instead of WaitForChild (prevents freeze)
+	local Child = Prefabs:FindFirstChild(Name)
+	if not Child then
+		-- Fallback: try WaitForChild with a short timeout
+		Child = Prefabs:WaitForChild(Name, 5)
+	end
+	
+	if not Child then
+		self:Warn("Prefab not found:", Name)
+		return nil
+	end
+
+	local Object = Wrappers:NewReference(Child:Clone())
 
 	--// Apply properties
 	if Properties then 
