@@ -4982,116 +4982,274 @@ function ReGui:Init(Overwrites: table?)
 		)
 	end
 
-	--// Bind events (store connection for cleanup)
 	local RenderConn = RunService.RenderStepped:Connect(InputUpdate)
 	table.insert(self._Connections, RenderConn)
+end
+
+function ReGui:BuildInternalPrefabs()
+	warn("[ReGui] Building Internal Prefabs...")
+
+	local Folder = Instance.new("Folder")
+	Folder.Name = "ReGui-Prefabs"
+	
+	local Prefabs = Instance.new("Folder")
+	Prefabs.Name = "Prefabs"
+	Prefabs.Parent = Folder
+	
+	-- Helper to make instances
+	local function Make(Class, Props, Parent)
+		local Obj = Instance.new(Class)
+		for k, v in pairs(Props) do
+			Obj[k] = v
+		end
+		if Parent then Obj.Parent = Parent end
+		return Obj
+	end
+	
+	--// 1. Container
+	local Container = Make("ScreenGui", {
+		Name = "Container",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	}, Prefabs)
+	
+	Make("Folder", {Name = "Windows"}, Container)
+	Make("Folder", {Name = "Overlays"}, Container)
+	
+	--// 2. Window
+	local Window = Make("Frame", {
+		Name = "Window",
+		Size = UDim2.fromOffset(400, 300),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+		BorderSizePixel = 0
+	}, Prefabs)
+	
+	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, Window)
+	
+	local WinContent = Make("Frame", {
+		Name = "Content",
+		Size = UDim2.new(1, 0, 1, -30),
+		Position = UDim2.fromOffset(0, 30),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true
+	}, Window)
+	
+	local TitleBar = Make("Frame", {
+		Name = "TitleBar",
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundColor3 = Color3.fromRGB(45, 45, 45),
+		BorderSizePixel = 0
+	}, Window)
+	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, TitleBar)
+	
+	Make("TextLabel", {
+		Name = "Title",
+		Text = "Window",
+		Size = UDim2.new(1, -60, 1, 0),
+		Position = UDim2.fromOffset(10, 0),
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(220, 220, 220),
+		Font = Enum.Font.SourceSansBold,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left
+	}, TitleBar)
+
+	local CloseBtn = Make("ImageButton", {
+		Name = "Close",
+		Size = UDim2.fromOffset(20, 20),
+		Position = UDim2.new(1, -25, 0.5, -10),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://3926305904",
+		ImageRectOffset = Vector2.new(284, 4),
+		ImageRectSize = Vector2.new(24, 24),
+		ImageColor3 = Color3.fromRGB(200, 200, 200)
+	}, TitleBar)
+	
+	local CollapseBtn = Make("ImageButton", {
+		Name = "Collapse",
+		Size = UDim2.fromOffset(20, 20),
+		Position = UDim2.new(1, -50, 0.5, -10),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://3926305904",
+		ImageRectOffset = Vector2.new(564, 284),
+		ImageRectSize = Vector2.new(36, 36),
+		ImageColor3 = Color3.fromRGB(200, 200, 200)
+	}, TitleBar)
+	
+	--// 3. Overlay (Missing in previous attempt)
+	Make("Frame", {
+		Name = "Overlay",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 10
+	}, Prefabs)
+
+	--// 4. Label (Missing in previous attempt)
+	Make("TextLabel", {
+		Name = "Label",
+		Size = UDim2.new(1, 0, 0, 20),
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(220, 220, 220),
+		Font = Enum.Font.SourceSans,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left
+	}, Prefabs)
+
+	--// 5. Button
+	local Button = Make("TextButton", {
+		Name = "Button",
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundColor3 = Color3.fromRGB(60, 60, 60),
+		BorderSizePixel = 0,
+		Text = "Button",
+		TextColor3 = Color3.fromRGB(240, 240, 240),
+		Font = Enum.Font.SourceSans,
+		TextSize = 14
+	}, Prefabs)
+	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, Button)
+
+	--// 6. Input / TextBox
+	local Input = Make("TextBox", {
+		Name = "Input",
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		BorderSizePixel = 0,
+		Text = "",
+		PlaceholderText = "Input...",
+		TextColor3 = Color3.fromRGB(240, 240, 240),
+		Font = Enum.Font.SourceSans,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false
+	}, Prefabs)
+	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, Input)
+	Make("UIPadding", {PaddingLeft = UDim.new(0, 6)}, Input)
+
+	--// 7. Checkbox
+	local Checkbox = Make("Frame", {
+		Name = "Checkbox",
+		Size = UDim2.fromOffset(20, 20),
+		BackgroundTransparency = 1
+	}, Prefabs)
+	local CheckBoxBtn = Make("ImageButton", {
+		Name = "Button",
+		Size = UDim2.fromOffset(16, 16),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		BorderSizePixel = 0,
+		AutoButtonColor = false
+	}, Checkbox)
+	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, CheckBoxBtn)
+	Make("ImageLabel", {
+		Name = "Check",
+		Size = UDim2.fromScale(0.8, 0.8),
+		Position = UDim2.fromScale(0.1, 0.1),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://3926305904",
+		ImageRectOffset = Vector2.new(312, 4),
+		ImageRectSize = Vector2.new(24, 24),
+		ImageColor3 = Color3.fromRGB(255, 255, 255),
+		Visible = false
+	}, CheckBoxBtn)
+	Make("TextLabel", {
+		Name = "Label",
+		Text = "Checkbox",
+		Size = UDim2.new(1, -24, 1, 0),
+		Position = UDim2.fromOffset(24, 0),
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(220, 220, 220),
+		Font = Enum.Font.SourceSans,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left
+	}, Checkbox)
+
+	--// 8. ResizeGrab
+	Make("ImageButton", {
+		Name = "ResizeGrab",
+		Size = UDim2.fromOffset(16, 16),
+		Position = UDim2.new(1, -16, 1, -16),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://3926305904", -- Example
+		ImageRectOffset = Vector2.new(364, 284),
+        ImageRectSize = Vector2.new(36, 36),
+		ImageTransparency = 0.5
+	}, Prefabs)
+
+	--// 9. ModalEffect
+	Make("Frame", {
+		Name = "ModalEffect",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.5
+	}, Prefabs)
+
+	--// 10. OverlayScroll
+	local OverlayScroll = Make("ScrollingFrame", {
+		Name = "OverlayScroll",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ScrollBarThickness = 4,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y
+	}, Prefabs)
+	Make("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder}, OverlayScroll)
+
+	--// 11. Tooltip
+	local Tooltip = Make("Frame", {
+		Name = "Tooltip",
+		Size = UDim2.fromOffset(100, 24),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+		BorderSizePixel = 1,
+		BorderColor3 = Color3.fromRGB(60, 60, 60)
+	}, Prefabs)
+	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, Tooltip)
+	Make("TextLabel", {
+		Name = "Label",
+		Size = UDim2.new(1, -10, 1, 0),
+		Position = UDim2.fromOffset(5, 0),
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.fromRGB(240, 240, 240),
+		Font = Enum.Font.SourceSans,
+		TextSize = 14,
+		TextWrapped = true
+	}, Tooltip)
+
+	--// 12. Separator
+	Make("Frame", {
+		Name = "Separator",
+		Size = UDim2.new(1, 0, 0, 1),
+		BackgroundColor3 = Color3.fromRGB(60, 60, 60),
+		BorderSizePixel = 0
+	}, Prefabs)
+
+	return Prefabs
 end
 
 function ReGui:CheckImportState()
 	--// Already initialised, skip
 	if self.Initialised then return end
 
-	--// Load internal prefabs instead of external assets
-    warn("[ReGui] Building Internal Prefabs...")
-    local InternalPrefabs = self:BuildInternalPrefabs()
-    
-    if InternalPrefabs then
-        self:Init({
-            Prefabs = InternalPrefabs
-        })
-    else
-        self:Warn("Failed to build internal prefabs!")
-    end
-end
+	--// Build Internal Prefabs
+	-- This replaces the old loading mechanism to avoid Asset 403 and 'Prefab not found' errors
+	local Prefabs = self:BuildInternalPrefabs()
 
-function ReGui:BuildInternalPrefabs()
-    local Folder = Instance.new("Folder")
-    Folder.Name = "ReGui-Prefabs"
-    
-    local Prefabs = Instance.new("Folder")
-    Prefabs.Name = "Prefabs"
-    Prefabs.Parent = Folder
-    
-    --// 1. Container
-    local Container = Instance.new("ScreenGui")
-    Container.Name = "Container"
-    Container.ResetOnSpawn = false
-    Container.IgnoreGuiInset = true
-    Container.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
-    local Windows = Instance.new("Folder")
-    Windows.Name = "Windows"
-    Windows.Parent = Container
-    
-    local Overlays = Instance.new("Folder")
-    Overlays.Name = "Overlays"
-    Overlays.Parent = Container
-    
-    Container.Parent = Prefabs
-    
-    --// 2. Window
-    local Window = Instance.new("Frame")
-    Window.Name = "Window"
-    Window.Size = UDim2.fromOffset(400, 300)
-    Window.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Window.BorderSizePixel = 0
-    
-    local Content = Instance.new("Frame")
-    Content.Name = "Content"
-    Content.Size = UDim2.fromScale(1, 1)
-    Content.BackgroundTransparency = 1
-    Content.Parent = Window
-    
-    local TitleBar = Instance.new("Frame")
-    TitleBar.Name = "TitleBar"
-    TitleBar.Size = UDim2.new(1, 0, 0, 30)
-    TitleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    TitleBar.BorderSizePixel = 0
-    TitleBar.Parent = Content
-    
-    local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Name = "Label" -- Used by flags?
-    TitleLabel.Text = "Window"
-    TitleLabel.Size = UDim2.fromScale(1, 1)
-    TitleLabel.BackgroundTransparency = 1
-    TitleLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-    TitleLabel.Font = Enum.Font.GothamBold
-    TitleLabel.TextSize = 14
-    TitleLabel.Parent = TitleBar
-    
-    Window.Parent = Prefabs
-    
-    --// 3. ResizeGrab
-    local ResizeGrab = Instance.new("ImageButton")
-    ResizeGrab.Name = "ResizeGrab"
-    ResizeGrab.Size = UDim2.fromOffset(16, 16)
-    ResizeGrab.Position = UDim2.new(1, -16, 1, -16)
-    ResizeGrab.AnchorPoint = Vector2.new(0, 0)
-    ResizeGrab.BackgroundTransparency = 1
-    ResizeGrab.Image = "rbxassetid://6031094678" -- Generic resize icon or nil
-    ResizeGrab.ImageTransparency = 0.5
-    ResizeGrab.Parent = Prefabs
+	--// Cleanup old container before re-init
+	pcall(function()
+		local parent = (get_hidden_gui and get_hidden_gui()) or (gethui and gethui())
+		if not parent then
+			parent = game:GetService("CoreGui")
+		end
+		local oldContainer = parent:FindFirstChild(self.ContainerName or "ReGui")
+		if oldContainer then
+			oldContainer:Destroy()
+			task.wait(0.05)
+		end
+	end)
 
-    --// 4. ModalEffect
-    local ModalEffect = Instance.new("Frame")
-    ModalEffect.Name = "ModalEffect"
-    ModalEffect.Size = UDim2.fromScale(1, 1)
-    ModalEffect.BackgroundColor3 = Color3.new(0, 0, 0)
-    ModalEffect.BackgroundTransparency = 0.5
-    ModalEffect.ZIndex = 0
-    ModalEffect.Parent = Prefabs
-    
-    --// 5. OverlayScroll (Used by OverlayScroll element)
-    local OverlayScroll = Instance.new("ScrollingFrame")
-    OverlayScroll.Name = "OverlayScroll"
-    OverlayScroll.BackgroundTransparency = 1
-    OverlayScroll.BorderSizePixel = 0
-    OverlayScroll.Size = UDim2.fromScale(1, 1)
-    OverlayScroll.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 200)
-    OverlayScroll.ScrollBarThickness = 4
-    OverlayScroll.Parent = Prefabs
-    
-    return Folder
+	-- Initialize ReGui with Prefabs
+	self:Init({
+		Prefabs = Prefabs
+	})
 end
 
 function ReGui:GetVersion(): string
