@@ -100,6 +100,15 @@ local function createSimple(class,props)
 	return inst
 end
 
+local Make = createSimple
+
+local function getproperties(inst)
+	if getgenv and getgenv().getproperties then
+		return getgenv().getproperties(inst)
+	end
+	return {}
+end
+
 local Lib = {}
 local cursor = NewInstance("Frame")
 
@@ -3908,16 +3917,17 @@ end
 Modules['config.Accent'] = function()
 return {
 	--// ReGui acent colors
-	Light = Color3.fromRGB(50, 150, 250),
-	Dark = Color3.fromRGB(30, 66, 115),
+	--// ReGui acent colors
+	Light = Color3.fromRGB(60, 160, 255),
+	Dark = Color3.fromRGB(40, 80, 140),
 	ExtraDark = Color3.fromRGB(28, 39, 53),
-	White = Color3.fromRGB(240, 240, 240),
-	Gray = Color3.fromRGB(172, 171, 175),
-	Black = Color3.fromRGB(15, 19, 24),
-	Yellow = Color3.fromRGB(230, 180, 0),
-	Orange = Color3.fromRGB(230, 150, 0),
-	Green = Color3.fromRGB(130, 188, 91),
-	Red = Color3.fromRGB(255, 69, 69),
+	White = Color3.fromRGB(255, 255, 255),
+	Gray = Color3.fromRGB(190, 190, 190),
+	Black = Color3.fromRGB(10, 14, 20),
+	Yellow = Color3.fromRGB(255, 200, 0),
+	Orange = Color3.fromRGB(255, 170, 0),
+	Green = Color3.fromRGB(140, 200, 100),
+	Red = Color3.fromRGB(255, 80, 80),
 
 	--// ImGui acent colors
 	ImGui = {
@@ -6362,8 +6372,16 @@ function ReGui:MakeResizable(Config: MakeResizableFlags)
 	local SizeOrgin = nil
 
 	--// Create grab element
-	local Grab = ReGui:InsertPrefab("ResizeGrab", {
-		Parent = Resize
+	--// Create grab element
+	local Grab = ReGui:CreateInstance("ImageButton", {
+		Name = "ResizeGrab",
+		Parent = Resize,
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://9086583059",
+		Size = UDim2.fromOffset(13, 13),
+		Position = UDim2.new(1, -2, 1, -2),
+		AnchorPoint = Vector2.new(1, 1),
+		ZIndex = 5
 	})
 
 	local function StateChanged(Interface)
