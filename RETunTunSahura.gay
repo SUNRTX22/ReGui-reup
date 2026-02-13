@@ -6368,7 +6368,7 @@ function ReGui:MakeResizable(Config: MakeResizableFlags)
 	})
 	Grab.BackgroundTransparency = 1
 	Grab.Text = "◢"
-	Grab.Size = UDim2.fromOffset(13, 13)
+	Grab.Size = UDim2.fromOffset(25, 25)
 	Grab.Position = UDim2.new(1, 0, 1, 0)
 	Grab.AnchorPoint = Vector2.new(1, 1)
 
