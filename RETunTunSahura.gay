@@ -4982,256 +4982,100 @@ function ReGui:Init(Overwrites: table?)
 		)
 	end
 
+	--// Bind events (store connection for cleanup)
 	local RenderConn = RunService.RenderStepped:Connect(InputUpdate)
 	table.insert(self._Connections, RenderConn)
-end
-
-function ReGui:BuildInternalPrefabs()
-	warn("[ReGui] Building Internal Prefabs...")
-
-	local Folder = Instance.new("Folder")
-	Folder.Name = "ReGui-Prefabs"
-	
-	local Prefabs = Instance.new("Folder")
-	Prefabs.Name = "Prefabs"
-	Prefabs.Parent = Folder
-	
-	-- Helper to make instances
-	local function Make(Class, Props, Parent)
-		local Obj = Instance.new(Class)
-		for k, v in pairs(Props) do
-			Obj[k] = v
-		end
-		if Parent then Obj.Parent = Parent end
-		return Obj
-	end
-	
-	--// 1. Container
-	local Container = Make("ScreenGui", {
-		Name = "Container",
-		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	}, Prefabs)
-	
-	Make("Folder", {Name = "Windows"}, Container)
-	Make("Folder", {Name = "Overlays"}, Container)
-	
-	--// 2. Window
-	local Window = Make("Frame", {
-		Name = "Window",
-		Size = UDim2.fromOffset(400, 300),
-		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
-		BorderSizePixel = 0
-	}, Prefabs)
-	
-	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, Window)
-	
-	local WinContent = Make("Frame", {
-		Name = "Content",
-		Size = UDim2.new(1, 0, 1, -30),
-		Position = UDim2.fromOffset(0, 30),
-		BackgroundTransparency = 1,
-		ClipsDescendants = true
-	}, Window)
-	
-	local TitleBar = Make("Frame", {
-		Name = "TitleBar",
-		Size = UDim2.new(1, 0, 0, 30),
-		BackgroundColor3 = Color3.fromRGB(45, 45, 45),
-		BorderSizePixel = 0
-	}, Window)
-	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, TitleBar)
-	
-	Make("TextLabel", {
-		Name = "Title",
-		Text = "Window",
-		Size = UDim2.new(1, -60, 1, 0),
-		Position = UDim2.fromOffset(10, 0),
-		BackgroundTransparency = 1,
-		TextColor3 = Color3.fromRGB(220, 220, 220),
-		Font = Enum.Font.SourceSansBold,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left
-	}, TitleBar)
-
-	local CloseBtn = Make("ImageButton", {
-		Name = "Close",
-		Size = UDim2.fromOffset(20, 20),
-		Position = UDim2.new(1, -25, 0.5, -10),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://3926305904",
-		ImageRectOffset = Vector2.new(284, 4),
-		ImageRectSize = Vector2.new(24, 24),
-		ImageColor3 = Color3.fromRGB(200, 200, 200)
-	}, TitleBar)
-	
-	local CollapseBtn = Make("ImageButton", {
-		Name = "Collapse",
-		Size = UDim2.fromOffset(20, 20),
-		Position = UDim2.new(1, -50, 0.5, -10),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://3926305904",
-		ImageRectOffset = Vector2.new(564, 284),
-		ImageRectSize = Vector2.new(36, 36),
-		ImageColor3 = Color3.fromRGB(200, 200, 200)
-	}, TitleBar)
-	
-	--// 3. Overlay (Missing in previous attempt)
-	Make("Frame", {
-		Name = "Overlay",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		ZIndex = 10
-	}, Prefabs)
-
-	--// 4. Label (Missing in previous attempt)
-	Make("TextLabel", {
-		Name = "Label",
-		Size = UDim2.new(1, 0, 0, 20),
-		BackgroundTransparency = 1,
-		TextColor3 = Color3.fromRGB(220, 220, 220),
-		Font = Enum.Font.SourceSans,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left
-	}, Prefabs)
-
-	--// 5. Button
-	local Button = Make("TextButton", {
-		Name = "Button",
-		Size = UDim2.new(1, 0, 0, 24),
-		BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-		BorderSizePixel = 0,
-		Text = "Button",
-		TextColor3 = Color3.fromRGB(240, 240, 240),
-		Font = Enum.Font.SourceSans,
-		TextSize = 14
-	}, Prefabs)
-	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, Button)
-
-	--// 6. Input / TextBox
-	local Input = Make("TextBox", {
-		Name = "Input",
-		Size = UDim2.new(1, 0, 0, 24),
-		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-		BorderSizePixel = 0,
-		Text = "",
-		PlaceholderText = "Input...",
-		TextColor3 = Color3.fromRGB(240, 240, 240),
-		Font = Enum.Font.SourceSans,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ClearTextOnFocus = false
-	}, Prefabs)
-	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, Input)
-	Make("UIPadding", {PaddingLeft = UDim.new(0, 6)}, Input)
-
-	--// 7. Checkbox
-	local Checkbox = Make("Frame", {
-		Name = "Checkbox",
-		Size = UDim2.fromOffset(20, 20),
-		BackgroundTransparency = 1
-	}, Prefabs)
-	local CheckBoxBtn = Make("ImageButton", {
-		Name = "Button",
-		Size = UDim2.fromOffset(16, 16),
-		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-		BorderSizePixel = 0,
-		AutoButtonColor = false
-	}, Checkbox)
-	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, CheckBoxBtn)
-	Make("ImageLabel", {
-		Name = "Check",
-		Size = UDim2.fromScale(0.8, 0.8),
-		Position = UDim2.fromScale(0.1, 0.1),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://3926305904",
-		ImageRectOffset = Vector2.new(312, 4),
-		ImageRectSize = Vector2.new(24, 24),
-		ImageColor3 = Color3.fromRGB(255, 255, 255),
-		Visible = false
-	}, CheckBoxBtn)
-	Make("TextLabel", {
-		Name = "Label",
-		Text = "Checkbox",
-		Size = UDim2.new(1, -24, 1, 0),
-		Position = UDim2.fromOffset(24, 0),
-		BackgroundTransparency = 1,
-		TextColor3 = Color3.fromRGB(220, 220, 220),
-		Font = Enum.Font.SourceSans,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left
-	}, Checkbox)
-
-	--// 8. ResizeGrab
-	Make("ImageButton", {
-		Name = "ResizeGrab",
-		Size = UDim2.fromOffset(16, 16),
-		Position = UDim2.new(1, -16, 1, -16),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://3926305904", -- Example
-		ImageRectOffset = Vector2.new(364, 284),
-        ImageRectSize = Vector2.new(36, 36),
-		ImageTransparency = 0.5
-	}, Prefabs)
-
-	--// 9. ModalEffect
-	Make("Frame", {
-		Name = "ModalEffect",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.5
-	}, Prefabs)
-
-	--// 10. OverlayScroll
-	local OverlayScroll = Make("ScrollingFrame", {
-		Name = "OverlayScroll",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		ScrollBarThickness = 4,
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y
-	}, Prefabs)
-	Make("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder}, OverlayScroll)
-
-	--// 11. Tooltip
-	local Tooltip = Make("Frame", {
-		Name = "Tooltip",
-		Size = UDim2.fromOffset(100, 24),
-		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
-		BorderSizePixel = 1,
-		BorderColor3 = Color3.fromRGB(60, 60, 60)
-	}, Prefabs)
-	Make("UICorner", {CornerRadius = UDim.new(0, 4)}, Tooltip)
-	Make("TextLabel", {
-		Name = "Label",
-		Size = UDim2.new(1, -10, 1, 0),
-		Position = UDim2.fromOffset(5, 0),
-		BackgroundTransparency = 1,
-		TextColor3 = Color3.fromRGB(240, 240, 240),
-		Font = Enum.Font.SourceSans,
-		TextSize = 14,
-		TextWrapped = true
-	}, Tooltip)
-
-	--// 12. Separator
-	Make("Frame", {
-		Name = "Separator",
-		Size = UDim2.new(1, 0, 0, 1),
-		BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-		BorderSizePixel = 0
-	}, Prefabs)
-
-	return Prefabs
 end
 
 function ReGui:CheckImportState()
 	--// Already initialised, skip
 	if self.Initialised then return end
 
-	--// Build Internal Prefabs
-	-- This replaces the old loading mechanism to avoid Asset 403 and 'Prefab not found' errors
-	local Prefabs = self:BuildInternalPrefabs()
+	local fileName = "ReGui-Prefabs.rbxm"
+	local Prefabs = nil
+
+	--// Step 1: Try loading cached Prefabs from getgenv
+    -- [DISABLED] getgenv caching is risky across rejoins and can cause freezes.
+	local genvSuccess, genvPrefabs = false, nil 
+    -- pcall(function()
+	-- 	if getgenv and getgenv().__ReGuiCachedPrefabs then
+    --         local cached = getgenv().__ReGuiCachedPrefabs
+    --         -- Validate cached instance
+    --         if typeof(cached) == "Instance" then
+    --             -- Check if it's not destroyed (Parent check or try to clone)
+    --             local s, r = pcall(function() return cached.Parent end)
+    --             if s then return cached end
+    --         end
+	-- 	end
+	-- 	return nil
+	-- end)
+	if genvSuccess and genvPrefabs then
+		warn("[ReGui] Loaded Prefabs from memory cache!")
+		Prefabs = genvPrefabs
+	end
+
+	--// Step 2: Try loading from saved file
+	if not Prefabs then
+		local fileSuccess = pcall(function()
+			if isfile and isfile(fileName) then
+				warn("[ReGui] Found saved Prefabs file, loading...")
+				local customAsset = getcustomasset(fileName)
+				Prefabs = game:GetObjects(customAsset)[1]
+			end
+		end)
+		
+		if not fileSuccess or not Prefabs then
+			-- File is corrupted, delete it
+			pcall(function()
+				if isfile and isfile(fileName) then 
+					delfile(fileName) 
+				end
+			end)
+			Prefabs = nil
+		end
+	end
+
+	--// Step 3: Try LoadLocalAsset (first time only)
+	if not Prefabs then
+		warn("[ReGui] Loading Prefabs from LoadLocalAsset...")
+		local PrefabsId = self.PrefabsId
+		local PrefabsAssetUrl = Wrappers:CheckAssetUrl(PrefabsId)
+		local Success, Result = pcall(function()
+			return Wrappers:NewReference(InsertService:LoadLocalAsset(PrefabsAssetUrl))
+		end)
+
+		if Success and Result then
+			Prefabs = Result
+			
+			-- Save to file for next time
+			-- Save to file for next time (Non-blocking)
+			task.spawn(function()
+				pcall(function()
+					if writefile and saveinstance then
+						-- Only save if not exists to avoid constant overwrites, or force update
+						saveinstance({
+							Instance = Prefabs,
+							SavePath = fileName,
+							SaveBinary = true
+						})
+						warn("[ReGui] Saved Prefabs to file for future use!")
+					end
+				end)
+			end)
+		else
+			warn("[ReGui] LoadLocalAsset failed:", Result)
+		end
+	end
+
+	--// Store in getgenv cache for re-execution
+	-- [DISABLED] Do not cache in getgenv to prevent stale instance issues
+	if Prefabs then
+		-- pcall(function()
+		-- 	if getgenv then
+		-- 		getgenv().__ReGuiCachedPrefabs = Prefabs
+		-- 	end
+		-- end)
+	end
 
 	--// Cleanup old container before re-init
 	pcall(function()
