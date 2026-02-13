@@ -5672,11 +5672,12 @@ function ReGui:CheckImportState()
                     warn("-- Copy the code below this line --")
                     
 
+
                     local out = {}
                     local function P(str) table.insert(out, str) end
                     
                     P("function ReGui:BuildInternalPrefabs()")
-                    P("    warn('[ReGui] Building Internal Prefabs (Full Dump)...')")
+                    P("    warn('[ReGui] Building Internal Prefabs (Volt Dump)...')")
                     P("    local Folder = Instance.new('Folder')")
                     P("    Folder.Name = 'ReGui-Prefabs'")
                     P("    local Prefabs = Instance.new('Folder')")
@@ -5691,8 +5692,8 @@ function ReGui:CheckImportState()
                     P("                for attrName, attrVal in pairs(v) do Obj:SetAttribute(attrName, attrVal) end")
                     P("            elseif k == '_Tags' then")
                     P("                for _, tag in ipairs(v) do game:GetService('CollectionService'):AddTag(Obj, tag) end")
-                    P("            else")
-                    P("                Obj[k] = v")
+                    P("            elseif k ~= 'Parent' then")
+                    P("                pcall(function() Obj[k] = v end)")
                     P("            end")
                     P("        end")
                     P("        if Parent then Obj.Parent = Parent end")
@@ -5711,6 +5712,9 @@ function ReGui:CheckImportState()
                         if typeof(Val) == "BrickColor" then return string.format("BrickColor.new(%q)", tostring(Val)) end
                         if typeof(Val) == "EnumItem" then return tostring(Val) end
                         if typeof(Val) == "Rect" then return string.format("Rect.new(%f, %f, %f, %f)", Val.Min.X, Val.Min.Y, Val.Max.X, Val.Max.Y) end
+                        if typeof(Val) == "PhysicalProperties" then 
+                             return string.format("PhysicalProperties.new(%f, %f, %f, %f, %f)", Val.Density, Val.Friction, Val.Elasticity, Val.FrictionWeight, Val.ElasticityWeight)
+                        end
                         if typeof(Val) == "ColorSequence" then
                             local keypoints = ""
                             for i, kp in ipairs(Val.Keypoints) do
@@ -5741,66 +5745,91 @@ function ReGui:CheckImportState()
                         varCounter = varCounter + 1
                         local varName = "Obj[" .. varCounter .. "]"
                         
-                        -- 1. PROPERTIES
-                        local commonProps = {
-                            "Name", "Visible", "Size", "Position", "AnchorPoint", "Rotation", "ZIndex", "LayoutOrder", 
-                            "BackgroundColor3", "BackgroundTransparency", "BorderColor3", "BorderSizePixel", "BorderMode",
-                            "ClipsDescendants", "Active", "Selectable", "AutoLocalize", "Interactable", "SelectionOrder"
-                        }
+                        local props = {}
+                        local success = false
                         
-                        local classProps = {
-                            TextLabel = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "TextTruncate", "TextDirection"},
-                            TextButton = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "AutoButtonColor", "Modal", "Selected", "Style", "TextTruncate"},
-                            TextBox = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "PlaceholderText", "PlaceholderColor3", "ClearTextOnFocus", "MultiLine", "TextEditable", "CursorPosition", "SelectionStart", "TextTruncate"},
-                            ImageLabel = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode"},
-                            ImageButton = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode", "AutoButtonColor", "Modal", "HoverImage", "PressedImage"},
-                            ScrollingFrame = {"CanvasSize", "CanvasPosition", "ScrollBarThickness", "ScrollBarImageColor3", "ScrollBarImageTransparency", "ScrollingDirection", "ElasticBehavior", "VerticalScrollBarPosition", "AutomaticCanvasSize", "TopImage", "MidImage", "BottomImage", "ScrollingEnabled", "VerticalScrollBarInset"},
-                            CanvasGroup = {"GroupColor3", "GroupTransparency"},
-                            UIListLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "Padding", "ItemLineAlignment"},
-                            UIGridLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "CellPadding", "CellSize", "FillDirectionMaxCells", "StartCorner"},
-                            UIPadding = {"PaddingTop", "PaddingBottom", "PaddingLeft", "PaddingRight"},
-                            UICorner = {"CornerRadius"},
-                            UIStroke = {"Color", "Transparency", "Thickness", "ApplyStrokeMode", "LineJoinMode"},
-                            UIGradient = {"Color", "Transparency", "Offset", "Rotation"},
-                            UIAspectRatioConstraint = {"AspectRatio", "AspectType", "DominantAxis"},
-                            UISizeConstraint = {"MaxSize", "MinSize"},
-                            UITextSizeConstraint = {"MaxTextSize", "MinTextSize"},
-                            UIDragDetector = {"DragStyle", "ResponseStyle", "ReferenceUI", "BoundingUI", "DragAxis"},
-                            Frame = {"Style"},
-                            VideoFrame = {"Video", "TimePosition", "Playing", "Looped", "Volume"}
-                        }
-                        
-                        local interestingProps = {}
-                        for _, p in ipairs(commonProps) do table.insert(interestingProps, p) end
-                        
-                        local specific = classProps[Obj.ClassName]
-                        if specific then
-                            for _, p in ipairs(specific) do table.insert(interestingProps, p) end
+                        if getproperties then
+                             -- 1. Try Volt/Executor 'getproperties' (Most Complete)
+                             local s, p = pcall(getproperties, Obj)
+                             if s and p then
+                                 success = true
+                                 props = p
+                             end
                         end
                         
+                        if not success then
+                             -- 2. Fallback to Manual List
+                            props = {}
+                            local commonProps = {
+                                "Name", "Visible", "Size", "Position", "AnchorPoint", "Rotation", "ZIndex", "LayoutOrder", 
+                                "BackgroundColor3", "BackgroundTransparency", "BorderColor3", "BorderSizePixel", "BorderMode",
+                                "ClipsDescendants", "Active", "Selectable", "AutoLocalize", "Interactable", "SelectionOrder"
+                            }
+                            local classProps = {
+                                TextLabel = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "TextTruncate", "TextDirection"},
+                                TextButton = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "AutoButtonColor", "Modal", "Selected", "Style", "TextTruncate"},
+                                TextBox = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "PlaceholderText", "PlaceholderColor3", "ClearTextOnFocus", "MultiLine", "TextEditable", "CursorPosition", "SelectionStart", "TextTruncate"},
+                                ImageLabel = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode"},
+                                ImageButton = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode", "AutoButtonColor", "Modal", "HoverImage", "PressedImage"},
+                                ScrollingFrame = {"CanvasSize", "CanvasPosition", "ScrollBarThickness", "ScrollBarImageColor3", "ScrollBarImageTransparency", "ScrollingDirection", "ElasticBehavior", "VerticalScrollBarPosition", "AutomaticCanvasSize", "TopImage", "MidImage", "BottomImage", "ScrollingEnabled", "VerticalScrollBarInset"},
+                                CanvasGroup = {"GroupColor3", "GroupTransparency"},
+                                UIListLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "Padding", "ItemLineAlignment"},
+                                UIGridLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "CellPadding", "CellSize", "FillDirectionMaxCells", "StartCorner"},
+                                UIPadding = {"PaddingTop", "PaddingBottom", "PaddingLeft", "PaddingRight"},
+                                UICorner = {"CornerRadius"},
+                                UIStroke = {"Color", "Transparency", "Thickness", "ApplyStrokeMode", "LineJoinMode"},
+                                UIGradient = {"Color", "Transparency", "Offset", "Rotation"},
+                                UIAspectRatioConstraint = {"AspectRatio", "AspectType", "DominantAxis"},
+                                UISizeConstraint = {"MaxSize", "MinSize"},
+                                UITextSizeConstraint = {"MaxTextSize", "MinTextSize"},
+                                UIDragDetector = {"DragStyle", "ResponseStyle", "ReferenceUI", "BoundingUI", "DragAxis"},
+                                Frame = {"Style"},
+                                VideoFrame = {"Video", "TimePosition", "Playing", "Looped", "Volume"}
+                            }
+                            
+                            for _, p in ipairs(commonProps) do 
+                                local s, v = pcall(function() return Obj[p] end)
+                                if s then props[p] = v end
+                            end
+                            local specific = classProps[Obj.ClassName]
+                            if specific then
+                                for _, p in ipairs(specific) do 
+                                    local s, v = pcall(function() return Obj[p] end)
+                                    if s then props[p] = v end
+                                end
+                            end
+                        end
+                        
+                        -- Process Props (Serialization & Filtering)
                         local propsStr = "{"
                         local first = true
                         
-                        for _, prop in ipairs(interestingProps) do
-                            local s, val = pcall(function() return Obj[prop] end)
-                            if s and val ~= nil then
-                                 -- Defaults Logic
-                                 local isDefault = (prop == "Name" and val == Obj.ClassName) or
-                                                   (prop == "Visible" and val == true) or
-                                                   (prop == "Active" and val == false) or
-                                                   (prop == "Selectable" and val == false) or
-                                                   (prop == "AutoLocalize" and val == true) or
-                                                   (prop == "Rotation" and val == 0) or
-                                                   (prop == "BackgroundTransparency" and val == 0 and not (Obj:IsA("Frame") or Obj:IsA("ScrollingFrame"))) or
-                                                   (prop == "BorderSizePixel" and val == 1) or
-                                                   (typeof(val) == "Vector2" and val == Vector2.new(0,0) and prop ~= "Size") or
-                                                   (typeof(val) == "UDim2" and val == UDim2.new(0,0,0,0) and prop ~= "Size" and prop ~= "Position") or
-                                                   (prop == "RichText" and val == false) or
-                                                   (prop == "ClipsDescendants" and val == false)
+                        -- Sort keys for consistent output? Not strictly necessary but nicer.
+                        -- Loop through props
+                        for p, val in pairs(props) do
+                            if val ~= nil then
+                                 -- Defaults Logic (To prevent bloat, even with full dump)
+                                 local isDefault = (p == "Name" and val == Obj.ClassName) or
+                                                   (p == "Visible" and val == true) or
+                                                   (p == "Active" and val == false) or
+                                                   (p == "Selectable" and val == false) or
+                                                   (p == "AutoLocalize" and val == true) or
+                                                   (p == "Rotation" and val == 0) or
+                                                   (p == "BackgroundTransparency" and val == 0 and not (Obj:IsA("Frame") or Obj:IsA("ScrollingFrame"))) or
+                                                   (p == "BorderSizePixel" and val == 1) or
+                                                   (typeof(val) == "Vector2" and val == Vector2.new(0,0) and p ~= "Size") or
+                                                   (typeof(val) == "UDim2" and val == UDim2.new(0,0,0,0) and p ~= "Size" and p ~= "Position") or
+                                                   (p == "RichText" and val == false) or
+                                                   (p == "ClipsDescendants" and val == false) or
+                                                   (p == "Parent") -- Don't dump Parent in properties
+                                 
+                                 -- Extra check: Is it serializable?
+                                 local sVal = SerializeVal(val)
+                                 if sVal == "nil" and typeof(val) ~= "nil" then isDefault = true end
                                  
                                  if not isDefault then
                                     if not first then propsStr = propsStr .. ", " end
-                                    propsStr = propsStr .. prop .. " = " .. SerializeVal(val)
+                                    propsStr = propsStr .. p .. " = " .. sVal
                                     first = false
                                  end
                             end
