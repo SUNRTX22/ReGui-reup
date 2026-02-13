@@ -4991,102 +4991,107 @@ function ReGui:CheckImportState()
 	--// Already initialised, skip
 	if self.Initialised then return end
 
-	local fileName = "ReGui-Prefabs.rbxm"
-	local Prefabs = nil
+	--// Load internal prefabs instead of external assets
+    warn("[ReGui] Building Internal Prefabs...")
+    local InternalPrefabs = self:BuildInternalPrefabs()
+    
+    if InternalPrefabs then
+        self:Init({
+            Prefabs = InternalPrefabs
+        })
+    else
+        self:Warn("Failed to build internal prefabs!")
+    end
+end
 
-	--// Step 1: Try loading cached Prefabs from getgenv
-	local genvSuccess, genvPrefabs = pcall(function()
-		if getgenv and getgenv().__ReGuiCachedPrefabs then
-            local cached = getgenv().__ReGuiCachedPrefabs
-            -- Validate cached instance
-            if typeof(cached) == "Instance" then
-                -- Check if it's not destroyed (Parent check or try to clone)
-                local s, r = pcall(function() return cached.Parent end)
-                if s then return cached end
-            end
-		end
-		return nil
-	end)
-	if genvSuccess and genvPrefabs then
-		warn("[ReGui] Loaded Prefabs from memory cache!")
-		Prefabs = genvPrefabs
-	end
+function ReGui:BuildInternalPrefabs()
+    local Folder = Instance.new("Folder")
+    Folder.Name = "ReGui-Prefabs"
+    
+    local Prefabs = Instance.new("Folder")
+    Prefabs.Name = "Prefabs"
+    Prefabs.Parent = Folder
+    
+    --// 1. Container
+    local Container = Instance.new("ScreenGui")
+    Container.Name = "Container"
+    Container.ResetOnSpawn = false
+    Container.IgnoreGuiInset = true
+    Container.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    local Windows = Instance.new("Folder")
+    Windows.Name = "Windows"
+    Windows.Parent = Container
+    
+    local Overlays = Instance.new("Folder")
+    Overlays.Name = "Overlays"
+    Overlays.Parent = Container
+    
+    Container.Parent = Prefabs
+    
+    --// 2. Window
+    local Window = Instance.new("Frame")
+    Window.Name = "Window"
+    Window.Size = UDim2.fromOffset(400, 300)
+    Window.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Window.BorderSizePixel = 0
+    
+    local Content = Instance.new("Frame")
+    Content.Name = "Content"
+    Content.Size = UDim2.fromScale(1, 1)
+    Content.BackgroundTransparency = 1
+    Content.Parent = Window
+    
+    local TitleBar = Instance.new("Frame")
+    TitleBar.Name = "TitleBar"
+    TitleBar.Size = UDim2.new(1, 0, 0, 30)
+    TitleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    TitleBar.BorderSizePixel = 0
+    TitleBar.Parent = Content
+    
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Name = "Label" -- Used by flags?
+    TitleLabel.Text = "Window"
+    TitleLabel.Size = UDim2.fromScale(1, 1)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    TitleLabel.Font = Enum.Font.GothamBold
+    TitleLabel.TextSize = 14
+    TitleLabel.Parent = TitleBar
+    
+    Window.Parent = Prefabs
+    
+    --// 3. ResizeGrab
+    local ResizeGrab = Instance.new("ImageButton")
+    ResizeGrab.Name = "ResizeGrab"
+    ResizeGrab.Size = UDim2.fromOffset(16, 16)
+    ResizeGrab.Position = UDim2.new(1, -16, 1, -16)
+    ResizeGrab.AnchorPoint = Vector2.new(0, 0)
+    ResizeGrab.BackgroundTransparency = 1
+    ResizeGrab.Image = "rbxassetid://6031094678" -- Generic resize icon or nil
+    ResizeGrab.ImageTransparency = 0.5
+    ResizeGrab.Parent = Prefabs
 
-	--// Step 2: Try loading from saved file
-	if not Prefabs then
-		local fileSuccess = pcall(function()
-			if isfile and isfile(fileName) then
-				warn("[ReGui] Found saved Prefabs file, loading...")
-				local customAsset = getcustomasset(fileName)
-				Prefabs = game:GetObjects(customAsset)[1]
-			end
-		end)
-		
-		if not fileSuccess or not Prefabs then
-			-- File is corrupted, delete it
-			pcall(function()
-				if isfile and isfile(fileName) then 
-					delfile(fileName) 
-				end
-			end)
-			Prefabs = nil
-		end
-	end
-
-	--// Step 3: Try LoadLocalAsset (first time only)
-	if not Prefabs then
-		warn("[ReGui] Loading Prefabs from LoadLocalAsset...")
-		local PrefabsId = self.PrefabsId
-		local PrefabsAssetUrl = Wrappers:CheckAssetUrl(PrefabsId)
-		local Success, Result = pcall(function()
-			return Wrappers:NewReference(InsertService:LoadLocalAsset(PrefabsAssetUrl))
-		end)
-
-		if Success and Result then
-			Prefabs = Result
-			
-			-- Save to file for next time
-			pcall(function()
-				if writefile and saveinstance then
-					-- saveinstance({
-					-- 	Instance = Prefabs,
-					-- 	SavePath = fileName,
-					-- 	SaveBinary = true
-					-- })
-					-- warn("[ReGui] Saved Prefabs to file for future use!")
-				end
-			end)
-		else
-			warn("[ReGui] LoadLocalAsset failed:", Result)
-		end
-	end
-
-	--// Store in getgenv cache for re-execution
-	if Prefabs then
-		pcall(function()
-			if getgenv then
-				getgenv().__ReGuiCachedPrefabs = Prefabs
-			end
-		end)
-	end
-
-	--// Cleanup old container before re-init
-	pcall(function()
-		local parent = (get_hidden_gui and get_hidden_gui()) or (gethui and gethui())
-		if not parent then
-			parent = game:GetService("CoreGui")
-		end
-		local oldContainer = parent:FindFirstChild(self.ContainerName or "ReGui")
-		if oldContainer then
-			oldContainer:Destroy()
-			task.wait(0.05)
-		end
-	end)
-
-	-- Initialize ReGui with Prefabs
-	self:Init({
-		Prefabs = Prefabs
-	})
+    --// 4. ModalEffect
+    local ModalEffect = Instance.new("Frame")
+    ModalEffect.Name = "ModalEffect"
+    ModalEffect.Size = UDim2.fromScale(1, 1)
+    ModalEffect.BackgroundColor3 = Color3.new(0, 0, 0)
+    ModalEffect.BackgroundTransparency = 0.5
+    ModalEffect.ZIndex = 0
+    ModalEffect.Parent = Prefabs
+    
+    --// 5. OverlayScroll (Used by OverlayScroll element)
+    local OverlayScroll = Instance.new("ScrollingFrame")
+    OverlayScroll.Name = "OverlayScroll"
+    OverlayScroll.BackgroundTransparency = 1
+    OverlayScroll.BorderSizePixel = 0
+    OverlayScroll.Size = UDim2.fromScale(1, 1)
+    OverlayScroll.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 200)
+    OverlayScroll.ScrollBarThickness = 4
+    OverlayScroll.Parent = Prefabs
+    
+    return Folder
 end
 
 function ReGui:GetVersion(): string
@@ -11136,6 +11141,17 @@ ReGui:DefineElement("Window", {
 
 		--// Global config unpack
 		local Windows = ReGui.Windows
+        
+        --// Validate Container existence to prevent crash
+        if not ReGui.Container then
+            ReGui:Warn("Window creation aborted: ReGui Container is missing (Initialization Failed)")
+            -- Return a dummy object to prevent calling code from crashing on nil access
+            local DummyClass = {}
+            function DummyClass:TagElements() end
+            setmetatable(DummyClass, {__index = function() return function() end end})
+            return DummyClass, Instance.new("Frame")
+        end
+
 		local WindowsContainer = ReGui.Container.Windows
 
 		ReGui:CheckConfig(Config, {
