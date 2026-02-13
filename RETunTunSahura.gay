@@ -5418,7 +5418,7 @@ function ReGui:CheckImportState()
 	if self.Initialised then return end
 
     -- RECOVERED PREFABS LOGIC
-    self.Prefabs = self:BuildInternalPrefabs()
+    --self.Prefabs = self:BuildInternalPrefabs()
 
     -- Cleanup old container
     pcall(function()
@@ -5427,9 +5427,9 @@ function ReGui:CheckImportState()
         if old then old:Destroy() task.wait() end
     end)
     
-    self:Init({Prefabs = self.Prefabs})
+    --self:Init({Prefabs = self.Prefabs})
     
-    if true then return end -- SKIP OLD CODE
+    --if true then return end -- SKIP OLD CODE
 
 	local fileName = "ReGui-Prefabs.rbxm"
 	local Prefabs = nil
@@ -5828,20 +5828,8 @@ function ReGui:CheckImportState()
                         -- Loop through props
                         for p, val in pairs(props) do
                             if val ~= nil then
-                                 -- Defaults Logic (To prevent bloat, even with full dump)
-                                 local isDefault = (p == "Name" and val == Obj.ClassName) or
-                                                   (p == "Visible" and val == true) or
-                                                   (p == "Active" and val == false) or
-                                                   (p == "Selectable" and val == false) or
-                                                   (p == "AutoLocalize" and val == true) or
-                                                   (p == "Rotation" and val == 0) or
-                                                   (p == "BackgroundTransparency" and val == 0 and not (Obj:IsA("Frame") or Obj:IsA("ScrollingFrame"))) or
-                                                   (p == "BorderSizePixel" and val == 1) or
-                                                   (typeof(val) == "Vector2" and val == Vector2.new(0,0) and p ~= "Size") or
-                                                   (typeof(val) == "UDim2" and val == UDim2.new(0,0,0,0) and p ~= "Size" and p ~= "Position") or
-                                                   (p == "RichText" and val == false) or
-                                                   (p == "ClipsDescendants" and val == false) or
-                                                   (p == "Parent") -- Don't dump Parent in properties
+                                 -- Defaults Logic (REMOVED: User requested full dump)
+                                 local isDefault = (p == "Parent") -- Don't dump Parent in properties
                                  
                                  -- Extra check: Is it serializable?
                                  local sVal = SerializeVal(val)
