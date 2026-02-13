@@ -5406,7 +5406,7 @@ function ReGui:CheckImportState()
 	if self.Initialised then return end
 
     -- RECOVERED PREFABS LOGIC
-    self.Prefabs = self:BuildInternalPrefabs()
+    --self.Prefabs = self:BuildInternalPrefabs()
 
     -- Cleanup old container
     pcall(function()
@@ -5415,9 +5415,9 @@ function ReGui:CheckImportState()
         if old then old:Destroy() task.wait() end
     end)
     
-    self:Init({Prefabs = self.Prefabs})
+    --self:Init({Prefabs = self.Prefabs})
     
-    if true then return end -- SKIP OLD CODE
+    --if true then return end -- SKIP OLD CODE
 
 	local fileName = "ReGui-Prefabs.rbxm"
 	local Prefabs = nil
@@ -5717,26 +5717,71 @@ function ReGui:CheckImportState()
                         varCounter = varCounter + 1
                         local varName = "Obj[" .. varCounter .. "]"
                         
-                        local propsStr = "{"
-                        local interestingProps = {
-                            "Name", "Size", "Position", "BackgroundColor3", "BackgroundTransparency", 
-                            "BorderSizePixel", "BorderColor3", "ZIndex", "LayoutOrder", "Visible", "ClipsDescendants",
-                            "Text", "TextColor3", "TextSize", "Font", "TextXAlignment", "TextYAlignment", 
-                            "TextTransparency", "TextWrapped", "PlaceholderText", "ClearTextOnFocus", "MultiLine",
-                            "Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter",
-                            "ScrollBarThickness", "CanvasSize", "AutomaticCanvasSize", "ScrollBarImageColor3",
-                            "CornerRadius", "PaddingTop", "PaddingBottom", "PaddingLeft", "PaddingRight",
-                            "SortOrder", "FillDirection", "HorizontalAlignment", "VerticalAlignment", "CellPadding", "CellSize",
-                            "Thickness", "ApplyStrokeMode", "Color", "Transparency",
-                            "AnchorPoint", "Rotation", "AutoButtonColor", "Modal", "Active", "Selectable", "RichText"
+                        local commonProps = {
+                            "Name", "Visible", "Size", "Position", "AnchorPoint", "Rotation", "ZIndex", "LayoutOrder", 
+                            "BackgroundColor3", "BackgroundTransparency", "BorderColor3", "BorderSizePixel", 
+                            "ClipsDescendants", "Active", "Selectable", "AutoLocalize"
                         }
                         
+                        local classProps = {
+                            TextLabel = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight"},
+                            TextButton = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "AutoButtonColor", "Modal"},
+                            TextBox = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "PlaceholderText", "PlaceholderColor3", "ClearTextOnFocus", "MultiLine", "TextEditable"},
+                            ImageLabel = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode"},
+                            ImageButton = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode", "AutoButtonColor", "Modal"},
+                            ScrollingFrame = {"CanvasSize", "CanvasPosition", "ScrollBarThickness", "ScrollBarImageColor3", "ScrollBarImageTransparency", "ScrollingDirection", "ElasticBehavior", "VerticalScrollBarPosition", "AutomaticCanvasSize", "TopImage", "MidImage", "BottomImage"},
+                            UIListLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "Padding"},
+                            UIGridLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "CellPadding", "CellSize", "FillDirectionMaxCells", "StartCorner"},
+                            UIPadding = {"PaddingTop", "PaddingBottom", "PaddingLeft", "PaddingRight"},
+                            UICorner = {"CornerRadius"},
+                            UIStroke = {"Color", "Transparency", "Thickness", "ApplyStrokeMode", "LineJoinMode"},
+                            UIGradient = {"Color", "Transparency", "Offset", "Rotation"},
+                            UIAspectRatioConstraint = {"AspectRatio", "AspectType", "DominantAxis"},
+                            UISizeConstraint = {"MaxSize", "MinSize"},
+                            UITextSizeConstraint = {"MaxTextSize", "MinTextSize"}
+                        }
+                        
+                        -- Merge props
+                        local interestingProps = {}
+                        for _, p in ipairs(commonProps) do table.insert(interestingProps, p) end
+                        
+                        -- Add class specific props
+                        local specific = classProps[Obj.ClassName]
+                        if specific then
+                            for _, p in ipairs(specific) do table.insert(interestingProps, p) end
+                        end
+                        
+                        local propsStr = "{"
                         local first = true
                         for _, prop in ipairs(interestingProps) do
                             local s, val = pcall(function() return Obj[prop] end)
                             if s and val ~= nil then
-                                 local isDefault = (prop == "Name" and val == Obj.ClassName)
+                                 -- Default Filtering to prevent bloat
+                                 local isDefault = false
+                                 if prop == "Name" and val == Obj.ClassName then isDefault = true end
+                                 if prop == "BackgroundTransparency" and val == 0 and (Obj:IsA("Frame") or Obj:IsA("ScrollingFrame")) then isDefault = false end -- Keep 0 for frames
+                                 if prop == "BackgroundTransparency" and val == 0 and not (Obj:IsA("Frame") or Obj:IsA("ScrollingFrame")) then isDefault = true end
+                                 if prop == "BorderSizePixel" and val == 1 then isDefault = true end -- Default is 0 usually for custom UI, but roblox default is 1
+                                 if prop == "BorderSizePixel" and val == 0 then isDefault = false end 
+                                 if prop == "Visible" and val == true then isDefault = true end
+                                 if prop == "Archivable" then isDefault = true end
                                  
+                                 -- Strict filtering for common defaults to reduce size
+                                 if (prop == "Rotation" and val == 0) or
+                                    (prop == "ImageRectOffset" and val == Vector2.new(0,0)) or
+                                    (prop == "ImageRectSize" and val == Vector2.new(0,0)) or
+                                    (prop == "CanvasPosition" and val == Vector2.new(0,0)) or
+                                    (prop == "RichText" and val == false) or
+                                    (prop == "TextScaled" and val == false) or
+                                    (prop == "TextWrapped" and val == false) or
+                                    (prop == "ClipsDescendants" and val == false) or
+                                    (prop == "Active" and val == false) or 
+                                    (prop == "Selectable" and val == false) or
+                                    (prop == "AutoLocalize" and val == true) or
+                                    (prop == "SliceScale" and val == 1) then
+                                     isDefault = true
+                                 end
+
                                  if not isDefault then
                                     if not first then propsStr = propsStr .. ", " end
                                     propsStr = propsStr .. prop .. " = " .. SerializeVal(val)
