@@ -5519,6 +5519,7 @@ function ReGui:CheckImportState()
                 P("    Prefabs.Name = 'Prefabs'")
                 P("    Prefabs.Parent = Folder")
                 
+                                P("    local Obj = {}") -- Table to hold objects (avoids local limit)
                 P("    local function Make(Class, Props, Parent)")
                 P("        local Obj = Instance.new(Class)")
                 P("        for k, v in pairs(Props) do Obj[k] = v end")
@@ -5540,7 +5541,10 @@ function ReGui:CheckImportState()
 
                 local varCounter = 0
                 
-                local function Process(Obj, ParentVar)
+                -- Forward declaration or upvalue for recursion
+                local Process 
+                
+                Process = function(Obj, ParentVar)
                     if Obj.Name == "ReGui-Prefabs" then 
                          -- Skip the root wrapper if it exists, look inside
                          for _, c in ipairs(Obj:GetChildren()) do Process(c, ParentVar) end
@@ -5548,7 +5552,7 @@ function ReGui:CheckImportState()
                     end
                     
                     varCounter = varCounter + 1
-                    local varName = "Obj" .. varCounter
+                    local varName = "Obj[" .. varCounter .. "]"
                     
                     local propsStr = "{"
                     local interestingProps = {
@@ -5583,7 +5587,7 @@ function ReGui:CheckImportState()
                     end
                     propsStr = propsStr .. "}"
                     
-                    P(string.format("    local %s = Make('%s', %s, %s)", varName, Obj.ClassName, propsStr, ParentVar))
+                    P(string.format("    %s = Make('%s', %s, %s)", varName, Obj.ClassName, propsStr, ParentVar))
                     
                     for _, child in ipairs(Obj:GetChildren()) do
                         Process(child, varName)
