@@ -5403,7 +5403,7 @@ function ReGui:CheckImportState()
 	if self.Initialised then return end
 
     -- RECOVERED PREFABS LOGIC
-    self.Prefabs = self:BuildInternalPrefabs()
+    -- self.Prefabs = self:BuildInternalPrefabs()
 
     -- Cleanup old container
     pcall(function()
@@ -5412,9 +5412,9 @@ function ReGui:CheckImportState()
         if old then old:Destroy() task.wait() end
     end)
     
-    self:Init({Prefabs = self.Prefabs})
+    -- self:Init({Prefabs = self.Prefabs})
     
-    if true then return end -- SKIP OLD CODE
+    -- if true then return end -- SKIP OLD CODE
 
 	local fileName = "ReGui-Prefabs.rbxm"
 	local Prefabs = nil
@@ -5661,6 +5661,115 @@ function ReGui:CheckImportState()
 	end)
 
 	-- Initialize ReGui with Prefabs
+            -------------------------------------------------------------------------
+            -- AUTO-DUMP PREFABS TO CONSOLE (NEW)
+            -------------------------------------------------------------------------
+            if Prefabs then
+                task.spawn(function()
+                    task.wait(1)
+                    
+                    warn("\n\n\n---------------- START OF PREFABS DUMP ----------------")
+                    warn("-- Copy the code below this line --")
+                    
+                    local out = {}
+                    local function P(str) table.insert(out, str) end
+                    
+                    P("function ReGui:BuildInternalPrefabs()")
+                    P("    warn('[ReGui] Building Internal Prefabs (Recovered)...')")
+                    P("    local Folder = Instance.new('Folder')")
+                    P("    Folder.Name = 'ReGui-Prefabs'")
+                    P("    local Prefabs = Instance.new('Folder')")
+                    P("    Prefabs.Name = 'Prefabs'")
+                    P("    Prefabs.Parent = Folder")
+                    P("    ")
+                    P("    local Obj = {} -- Table to hold objects (avoids local limit)")
+                    P("    local function Make(Class, Props, Parent)")
+                    P("        local Obj = Instance.new(Class)")
+                    P("        for k, v in pairs(Props) do Obj[k] = v end")
+                    P("        if Parent then Obj.Parent = Parent end")
+                    P("        return Obj")
+                    P("    end")
+                    
+                    local function SerializeVal(Val)
+                        if typeof(Val) == "string" then return string.format("%q", Val) end
+                        if typeof(Val) == "Vector2" then return string.format("Vector2.new(%f, %f)", Val.X, Val.Y) end
+                        if typeof(Val) == "UDim2" then return string.format("UDim2.new(%f, %d, %f, %d)", Val.X.Scale, Val.X.Offset, Val.Y.Scale, Val.Y.Offset) end
+                        if typeof(Val) == "UDim" then return string.format("UDim.new(%f, %d)", Val.Scale, Val.Offset) end
+                        if typeof(Val) == "Color3" then return string.format("Color3.fromRGB(%d, %d, %d)", math.floor(Val.R*255), math.floor(Val.G*255), math.floor(Val.B*255)) end
+                        if typeof(Val) == "EnumItem" then return tostring(Val) end
+                        if typeof(Val) == "boolean" then return tostring(Val) end
+                        if typeof(Val) == "number" then return tostring(Val) end
+                        return "nil"
+                    end
+
+                    local varCounter = 0
+                    local Process 
+                    
+                    Process = function(Obj, ParentVar)
+                        if Obj.Name == "ReGui-Prefabs" then 
+                             for _, c in ipairs(Obj:GetChildren()) do Process(c, ParentVar) end
+                             return
+                        end
+                        
+                        varCounter = varCounter + 1
+                        local varName = "Obj[" .. varCounter .. "]"
+                        
+                        local propsStr = "{"
+                        local interestingProps = {
+                            "Name", "Size", "Position", "BackgroundColor3", "BackgroundTransparency", 
+                            "BorderSizePixel", "BorderColor3", "ZIndex", "LayoutOrder", "Visible", "ClipsDescendants",
+                            "Text", "TextColor3", "TextSize", "Font", "TextXAlignment", "TextYAlignment", 
+                            "TextTransparency", "TextWrapped", "PlaceholderText", "ClearTextOnFocus", "MultiLine",
+                            "Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter",
+                            "ScrollBarThickness", "CanvasSize", "AutomaticCanvasSize", "ScrollBarImageColor3",
+                            "CornerRadius", "PaddingTop", "PaddingBottom", "PaddingLeft", "PaddingRight",
+                            "SortOrder", "FillDirection", "HorizontalAlignment", "VerticalAlignment", "CellPadding", "CellSize",
+                            "Thickness", "ApplyStrokeMode", "Color", "Transparency",
+                            "AnchorPoint", "Rotation", "AutoButtonColor", "Modal", "Active", "Selectable", "RichText"
+                        }
+                        
+                        local first = true
+                        for _, prop in ipairs(interestingProps) do
+                            local s, val = pcall(function() return Obj[prop] end)
+                            if s and val ~= nil then
+                                 local isDefault = (prop == "Name" and val == Obj.ClassName)
+                                 
+                                 if not isDefault then
+                                    if not first then propsStr = propsStr .. ", " end
+                                    propsStr = propsStr .. prop .. " = " .. SerializeVal(val)
+                                    first = false
+                                 end
+                            end
+                        end
+                        propsStr = propsStr .. "}"
+                        
+                        P(string.format("    %s = Make('%s', %s, %s)", varName, Obj.ClassName, propsStr, ParentVar))
+                        
+                        for _, child in ipairs(Obj:GetChildren()) do
+                            Process(child, varName)
+                        end
+                    end
+                    
+                    for _, child in ipairs(Prefabs:GetChildren()) do
+                        Process(child, "Prefabs")
+                    end
+                    
+                    P("    return Prefabs")
+                    P("end")
+                    
+                    local finalCode = table.concat(out, "\n")
+                    
+                    print(finalCode)
+                    if setclipboard then
+                        setclipboard(finalCode)
+                        warn(">> CODE COPIED TO CLIPBOARD! <<")
+                    end
+                    
+                    warn("-- Copy the code above this line --")
+                    warn("---------------- END OF PREFABS DUMP ----------------\n")
+                end)
+            end
+            -------------------------------------------------------------------------
 	self:Init({
 		Prefabs = Prefabs
 	})
