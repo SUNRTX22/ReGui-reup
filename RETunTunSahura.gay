@@ -6362,16 +6362,15 @@ function ReGui:MakeResizable(Config: MakeResizableFlags)
 	local SizeOrgin = nil
 
 	--// Create grab element
-	local Grab = ReGui:CreateInstance("ImageButton", {
-		Name = "ResizeGrab",
-		Parent = Resize,
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://9086583059",
-		Size = UDim2.fromOffset(13, 13),
-		Position = UDim2.new(1, -2, 1, -2),
-		AnchorPoint = Vector2.new(1, 1),
-		ZIndex = 5
+	--// Create grab element
+	local Grab = ReGui:InsertPrefab("ResizeGrab", {
+		Parent = Resize
 	})
+	Grab.BackgroundTransparency = 1
+	Grab.Text = "◢"
+	Grab.Size = UDim2.fromOffset(13, 13)
+	Grab.Position = UDim2.new(1, 0, 1, 0)
+	Grab.AnchorPoint = Vector2.new(1, 1)
 
 	local function StateChanged(Interface)
 		Grab.Visible = Interface.Enabled
