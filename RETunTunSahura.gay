@@ -5016,21 +5016,47 @@ function ReGui:CheckImportState()
 
 	--// Step 2: Try loading from saved file
 	if not Prefabs then
-		local fileSuccess = pcall(function()
+		warn("[ReGui-Debug] Step 2: Attempting to load from file: " .. fileName)
+		
+		-- DEBUG: Check file existence explicitly
+		pcall(function()
+			if isfile and isfile(fileName) then
+				warn("[ReGui-Debug] File exists on disk.")
+			else
+				warn("[ReGui-Debug] File does NOT exist on disk.")
+			end
+		end)
+
+		local fileSuccess, err = pcall(function()
 			if isfile and isfile(fileName) then
 				warn("[ReGui] Found saved Prefabs file, loading...")
 				local customAsset = getcustomasset(fileName)
-				Prefabs = game:GetObjects(customAsset)[1]
+				warn("[ReGui-Debug] getcustomasset returned: " .. tostring(customAsset))
+				
+				if customAsset then
+					local objects = game:GetObjects(customAsset)
+					if objects and objects[1] then
+						Prefabs = objects[1]
+						warn("[ReGui-Debug] Successfully loaded Prefabs from file!")
+					else
+						warn("[ReGui-Debug] GetObjects returned nil or empty table.")
+					end
+				end
 			end
 		end)
 		
+		if not fileSuccess then
+			warn("[ReGui-Debug] Error loading from file: " .. tostring(err))
+		end
+		
 		if not fileSuccess or not Prefabs then
 			-- File is corrupted, delete it
-			pcall(function()
-				if isfile and isfile(fileName) then 
-					delfile(fileName) 
-				end
-			end)
+			warn("[ReGui-Debug] File load failed but NOT deleting file for debug.")
+			-- pcall(function()
+			-- 	if isfile and isfile(fileName) then 
+			-- 		delfile(fileName) 
+			-- 	end
+			-- end)
 			Prefabs = nil
 		end
 	end
@@ -5059,6 +5085,8 @@ function ReGui:CheckImportState()
 							SaveBinary = true
 						})
 						warn("[ReGui] Saved Prefabs to file for future use!")
+					else
+						warn("[ReGui-Debug] Cannot save: missing writefile or saveinstance")
 					end
 				end)
 			end)
