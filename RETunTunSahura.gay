@@ -4989,6 +4989,11 @@ end
 
 function ReGui:BuildInternalPrefabs()
     warn('[ReGui] Building Internal Prefabs (Volt Dump)...')
+    -- // FIX VOLT DUMP VALUES //
+    local inf = math.huge
+    local ind = nil
+    local function nan(...) return 0 end
+    -- // END FIX //
     local Folder = Instance.new('Folder')
     Folder.Name = 'ReGui-Prefabs'
     local Prefabs = Instance.new('Folder')
@@ -5687,7 +5692,12 @@ function ReGui:CheckImportState()
                     local function P(str) table.insert(out, str) end
                     
                     P("function ReGui:BuildInternalPrefabs()")
-                    P("    warn('[ReGui] Building Internal Prefabs (Volt Dump)...')")
+                    P("    warn('[ReGui] Building Internal Prefabs (Volt Dump)...')
+    -- // FIX VOLT DUMP VALUES //
+    local inf = math.huge
+    local ind = nil
+    local function nan(...) return 0 end
+    -- // END FIX //")
                     P("    local Folder = Instance.new('Folder')")
                     P("    Folder.Name = 'ReGui-Prefabs'")
                     P("    local Prefabs = Instance.new('Folder')")
