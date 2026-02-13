@@ -5403,7 +5403,7 @@ function ReGui:CheckImportState()
 	if self.Initialised then return end
 
     -- RECOVERED PREFABS LOGIC
-    self.Prefabs = self:BuildInternalPrefabs()
+    --self.Prefabs = self:BuildInternalPrefabs()
 
     -- Cleanup old container
     pcall(function()
@@ -5412,9 +5412,9 @@ function ReGui:CheckImportState()
         if old then old:Destroy() task.wait() end
     end)
     
-    self:Init({Prefabs = self.Prefabs})
+    --self:Init({Prefabs = self.Prefabs})
     
-    if true then return end -- SKIP OLD CODE
+    --if true then return end -- SKIP OLD CODE
 
 	local fileName = "ReGui-Prefabs.rbxm"
 	local Prefabs = nil
@@ -5671,42 +5671,69 @@ function ReGui:CheckImportState()
                     warn("\n\n\n---------------- START OF PREFABS DUMP ----------------")
                     warn("-- Copy the code below this line --")
                     
+
                     local out = {}
                     local function P(str) table.insert(out, str) end
                     
                     P("function ReGui:BuildInternalPrefabs()")
-                    P("    warn('[ReGui] Building Internal Prefabs (Recovered)...')")
+                    P("    warn('[ReGui] Building Internal Prefabs (Full Dump)...')")
                     P("    local Folder = Instance.new('Folder')")
                     P("    Folder.Name = 'ReGui-Prefabs'")
                     P("    local Prefabs = Instance.new('Folder')")
                     P("    Prefabs.Name = 'Prefabs'")
                     P("    Prefabs.Parent = Folder")
                     P("    ")
-                    P("    local Obj = {} -- Table to hold objects (avoids local limit)")
+                    P("    local Obj = {}")
                     P("    local function Make(Class, Props, Parent)")
                     P("        local Obj = Instance.new(Class)")
-                    P("        for k, v in pairs(Props) do Obj[k] = v end")
+                    P("        for k, v in pairs(Props) do")
+                    P("            if k == '_Attributes' then")
+                    P("                for attrName, attrVal in pairs(v) do Obj:SetAttribute(attrName, attrVal) end")
+                    P("            elseif k == '_Tags' then")
+                    P("                for _, tag in ipairs(v) do game:GetService('CollectionService'):AddTag(Obj, tag) end")
+                    P("            else")
+                    P("                Obj[k] = v")
+                    P("            end")
+                    P("        end")
                     P("        if Parent then Obj.Parent = Parent end")
                     P("        return Obj")
                     P("    end")
                     
                     local function SerializeVal(Val)
                         if typeof(Val) == "string" then return string.format("%q", Val) end
+                        if typeof(Val) == "boolean" then return tostring(Val) end
+                        if typeof(Val) == "number" then return tostring(Val) end
                         if typeof(Val) == "Vector2" then return string.format("Vector2.new(%f, %f)", Val.X, Val.Y) end
+                        if typeof(Val) == "Vector3" then return string.format("Vector3.new(%f, %f, %f)", Val.X, Val.Y, Val.Z) end
                         if typeof(Val) == "UDim2" then return string.format("UDim2.new(%f, %d, %f, %d)", Val.X.Scale, Val.X.Offset, Val.Y.Scale, Val.Y.Offset) end
                         if typeof(Val) == "UDim" then return string.format("UDim.new(%f, %d)", Val.Scale, Val.Offset) end
                         if typeof(Val) == "Color3" then return string.format("Color3.fromRGB(%d, %d, %d)", math.floor(Val.R*255), math.floor(Val.G*255), math.floor(Val.B*255)) end
+                        if typeof(Val) == "BrickColor" then return string.format("BrickColor.new(%q)", tostring(Val)) end
                         if typeof(Val) == "EnumItem" then return tostring(Val) end
-                        if typeof(Val) == "boolean" then return tostring(Val) end
-                        if typeof(Val) == "number" then return tostring(Val) end
+                        if typeof(Val) == "Rect" then return string.format("Rect.new(%f, %f, %f, %f)", Val.Min.X, Val.Min.Y, Val.Max.X, Val.Max.Y) end
+                        if typeof(Val) == "ColorSequence" then
+                            local keypoints = ""
+                            for i, kp in ipairs(Val.Keypoints) do
+                                if i > 1 then keypoints = keypoints .. ", " end
+                                keypoints = keypoints .. string.format("ColorSequenceKeypoint.new(%f, Color3.new(%f, %f, %f))", kp.Time, kp.Value.R, kp.Value.G, kp.Value.B)
+                            end
+                            return string.format("ColorSequence.new({%s})", keypoints)
+                        end
+                         if typeof(Val) == "NumberSequence" then
+                            local keypoints = ""
+                            for i, kp in ipairs(Val.Keypoints) do
+                                if i > 1 then keypoints = keypoints .. ", " end
+                                keypoints = keypoints .. string.format("NumberSequenceKeypoint.new(%f, %f, %f)", kp.Time, kp.Value, kp.Envelope)
+                            end
+                            return string.format("NumberSequence.new({%s})", keypoints)
+                        end
                         return "nil"
                     end
 
                     local varCounter = 0
-                    local Process 
-                    
-                    Process = function(Obj, ParentVar)
+                    local function Process(Obj, ParentVar)
                         if Obj.Name == "ReGui-Prefabs" then 
+                             -- Skip the wrapper itself
                              for _, c in ipairs(Obj:GetChildren()) do Process(c, ParentVar) end
                              return
                         end
@@ -5714,20 +5741,22 @@ function ReGui:CheckImportState()
                         varCounter = varCounter + 1
                         local varName = "Obj[" .. varCounter .. "]"
                         
+                        -- 1. PROPERTIES
                         local commonProps = {
                             "Name", "Visible", "Size", "Position", "AnchorPoint", "Rotation", "ZIndex", "LayoutOrder", 
-                            "BackgroundColor3", "BackgroundTransparency", "BorderColor3", "BorderSizePixel", 
-                            "ClipsDescendants", "Active", "Selectable", "AutoLocalize"
+                            "BackgroundColor3", "BackgroundTransparency", "BorderColor3", "BorderSizePixel", "BorderMode",
+                            "ClipsDescendants", "Active", "Selectable", "AutoLocalize", "Interactable", "SelectionOrder"
                         }
                         
                         local classProps = {
-                            TextLabel = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight"},
-                            TextButton = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "AutoButtonColor", "Modal"},
-                            TextBox = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "PlaceholderText", "PlaceholderColor3", "ClearTextOnFocus", "MultiLine", "TextEditable"},
+                            TextLabel = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "TextTruncate", "TextDirection"},
+                            TextButton = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "AutoButtonColor", "Modal", "Selected", "Style", "TextTruncate"},
+                            TextBox = {"Text", "TextColor3", "TextSize", "TextTransparency", "TextStrokeColor3", "TextStrokeTransparency", "Font", "TextScaled", "TextWrapped", "TextXAlignment", "TextYAlignment", "RichText", "MaxVisibleGraphemes", "LineHeight", "PlaceholderText", "PlaceholderColor3", "ClearTextOnFocus", "MultiLine", "TextEditable", "CursorPosition", "SelectionStart", "TextTruncate"},
                             ImageLabel = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode"},
-                            ImageButton = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode", "AutoButtonColor", "Modal"},
-                            ScrollingFrame = {"CanvasSize", "CanvasPosition", "ScrollBarThickness", "ScrollBarImageColor3", "ScrollBarImageTransparency", "ScrollingDirection", "ElasticBehavior", "VerticalScrollBarPosition", "AutomaticCanvasSize", "TopImage", "MidImage", "BottomImage"},
-                            UIListLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "Padding"},
+                            ImageButton = {"Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter", "SliceScale", "TileSize", "ResampleMode", "AutoButtonColor", "Modal", "HoverImage", "PressedImage"},
+                            ScrollingFrame = {"CanvasSize", "CanvasPosition", "ScrollBarThickness", "ScrollBarImageColor3", "ScrollBarImageTransparency", "ScrollingDirection", "ElasticBehavior", "VerticalScrollBarPosition", "AutomaticCanvasSize", "TopImage", "MidImage", "BottomImage", "ScrollingEnabled", "VerticalScrollBarInset"},
+                            CanvasGroup = {"GroupColor3", "GroupTransparency"},
+                            UIListLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "Padding", "ItemLineAlignment"},
                             UIGridLayout = {"FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment", "CellPadding", "CellSize", "FillDirectionMaxCells", "StartCorner"},
                             UIPadding = {"PaddingTop", "PaddingBottom", "PaddingLeft", "PaddingRight"},
                             UICorner = {"CornerRadius"},
@@ -5735,14 +5764,15 @@ function ReGui:CheckImportState()
                             UIGradient = {"Color", "Transparency", "Offset", "Rotation"},
                             UIAspectRatioConstraint = {"AspectRatio", "AspectType", "DominantAxis"},
                             UISizeConstraint = {"MaxSize", "MinSize"},
-                            UITextSizeConstraint = {"MaxTextSize", "MinTextSize"}
+                            UITextSizeConstraint = {"MaxTextSize", "MinTextSize"},
+                            UIDragDetector = {"DragStyle", "ResponseStyle", "ReferenceUI", "BoundingUI", "DragAxis"},
+                            Frame = {"Style"},
+                            VideoFrame = {"Video", "TimePosition", "Playing", "Looped", "Volume"}
                         }
                         
-                        -- Merge props
                         local interestingProps = {}
                         for _, p in ipairs(commonProps) do table.insert(interestingProps, p) end
                         
-                        -- Add class specific props
                         local specific = classProps[Obj.ClassName]
                         if specific then
                             for _, p in ipairs(specific) do table.insert(interestingProps, p) end
@@ -5750,35 +5780,24 @@ function ReGui:CheckImportState()
                         
                         local propsStr = "{"
                         local first = true
+                        
                         for _, prop in ipairs(interestingProps) do
                             local s, val = pcall(function() return Obj[prop] end)
                             if s and val ~= nil then
-                                 -- Default Filtering to prevent bloat
-                                 local isDefault = false
-                                 if prop == "Name" and val == Obj.ClassName then isDefault = true end
-                                 if prop == "BackgroundTransparency" and val == 0 and (Obj:IsA("Frame") or Obj:IsA("ScrollingFrame")) then isDefault = false end -- Keep 0 for frames
-                                 if prop == "BackgroundTransparency" and val == 0 and not (Obj:IsA("Frame") or Obj:IsA("ScrollingFrame")) then isDefault = true end
-                                 if prop == "BorderSizePixel" and val == 1 then isDefault = true end -- Default is 0 usually for custom UI, but roblox default is 1
-                                 if prop == "BorderSizePixel" and val == 0 then isDefault = false end 
-                                 if prop == "Visible" and val == true then isDefault = true end
-                                 if prop == "Archivable" then isDefault = true end
+                                 -- Defaults Logic
+                                 local isDefault = (prop == "Name" and val == Obj.ClassName) or
+                                                   (prop == "Visible" and val == true) or
+                                                   (prop == "Active" and val == false) or
+                                                   (prop == "Selectable" and val == false) or
+                                                   (prop == "AutoLocalize" and val == true) or
+                                                   (prop == "Rotation" and val == 0) or
+                                                   (prop == "BackgroundTransparency" and val == 0 and not (Obj:IsA("Frame") or Obj:IsA("ScrollingFrame"))) or
+                                                   (prop == "BorderSizePixel" and val == 1) or
+                                                   (typeof(val) == "Vector2" and val == Vector2.new(0,0) and prop ~= "Size") or
+                                                   (typeof(val) == "UDim2" and val == UDim2.new(0,0,0,0) and prop ~= "Size" and prop ~= "Position") or
+                                                   (prop == "RichText" and val == false) or
+                                                   (prop == "ClipsDescendants" and val == false)
                                  
-                                 -- Strict filtering for common defaults to reduce size
-                                 if (prop == "Rotation" and val == 0) or
-                                    (prop == "ImageRectOffset" and val == Vector2.new(0,0)) or
-                                    (prop == "ImageRectSize" and val == Vector2.new(0,0)) or
-                                    (prop == "CanvasPosition" and val == Vector2.new(0,0)) or
-                                    (prop == "RichText" and val == false) or
-                                    (prop == "TextScaled" and val == false) or
-                                    (prop == "TextWrapped" and val == false) or
-                                    (prop == "ClipsDescendants" and val == false) or
-                                    (prop == "Active" and val == false) or 
-                                    (prop == "Selectable" and val == false) or
-                                    (prop == "AutoLocalize" and val == true) or
-                                    (prop == "SliceScale" and val == 1) then
-                                     isDefault = true
-                                 end
-
                                  if not isDefault then
                                     if not first then propsStr = propsStr .. ", " end
                                     propsStr = propsStr .. prop .. " = " .. SerializeVal(val)
@@ -5786,6 +5805,34 @@ function ReGui:CheckImportState()
                                  end
                             end
                         end
+                        
+                        -- 2. ATTRIBUTES
+                        local attrs = Obj:GetAttributes()
+                        if next(attrs) then
+                            if not first then propsStr = propsStr .. ", " end
+                            propsStr = propsStr .. "_Attributes = {"
+                            local firstAttr = true
+                            for n, v in pairs(attrs) do
+                                if not firstAttr then propsStr = propsStr .. ", " end
+                                propsStr = propsStr .. "['" .. n .. "'] = " .. SerializeVal(v)
+                                firstAttr = false
+                            end
+                            propsStr = propsStr .. "}"
+                            first = false
+                        end
+                        
+                        -- 3. TAGS
+                        local tags = game:GetService("CollectionService"):GetTags(Obj)
+                        if #tags > 0 then
+                            if not first then propsStr = propsStr .. ", " end
+                            propsStr = propsStr .. "_Tags = {"
+                            for i, t in ipairs(tags) do
+                                if i > 1 then propsStr = propsStr .. ", " end
+                                propsStr = propsStr .. string.format("%q", t)
+                            end
+                            propsStr = propsStr .. "}"
+                        end
+
                         propsStr = propsStr .. "}"
                         
                         P(string.format("    %s = Make('%s', %s, %s)", varName, Obj.ClassName, propsStr, ParentVar))
@@ -5803,15 +5850,14 @@ function ReGui:CheckImportState()
                     P("end")
                     
                     local finalCode = table.concat(out, "\n")
-                    
                     print(finalCode)
                     if setclipboard then
                         setclipboard(finalCode)
-                        warn(">> CODE COPIED TO CLIPBOARD! <<")
+                        warn(">> FULL DUMP COPIED TO CLIPBOARD! <<")
                     end
                     
                     warn("-- Copy the code above this line --")
-                    warn("---------------- END OF PREFABS DUMP ----------------\n")
+                    warn("---------------- END OF FULL DUMP ----------------\n")
                 end)
             end
             -------------------------------------------------------------------------
