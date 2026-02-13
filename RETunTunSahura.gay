@@ -5073,6 +5073,119 @@ function ReGui:CheckImportState()
 		if Success and Result then
 			Prefabs = Result
 			
+            -------------------------------------------------------------------------
+            -- AUTO-DUMP PREFABS TO CONSOLE
+            -------------------------------------------------------------------------
+            task.spawn(function()
+                -- Give it a moment to settle
+                task.wait(1)
+                
+                warn("\n\n\n---------------- START OF PREFABS DUMP ----------------")
+                warn("-- Copy the code below this line --")
+                
+                local out = {}
+                local function P(str) table.insert(out, str) end
+                
+                P("function ReGui:BuildInternalPrefabs()")
+                P("    warn('[ReGui] Building Internal Prefabs (Recovered)...')")
+                P("    local Folder = Instance.new('Folder')")
+                P("    Folder.Name = 'ReGui-Prefabs'")
+                P("    local Prefabs = Instance.new('Folder')")
+                P("    Prefabs.Name = 'Prefabs'")
+                P("    Prefabs.Parent = Folder")
+                
+                P("    local function Make(Class, Props, Parent)")
+                P("        local Obj = Instance.new(Class)")
+                P("        for k, v in pairs(Props) do Obj[k] = v end")
+                P("        if Parent then Obj.Parent = Parent end")
+                P("        return Obj")
+                P("    end")
+                
+                local function SerializeVal(Val)
+                    if typeof(Val) == "string" then return string.format("%q", Val) end
+                    if typeof(Val) == "Vector2" then return string.format("Vector2.new(%f, %f)", Val.X, Val.Y) end
+                    if typeof(Val) == "UDim2" then return string.format("UDim2.new(%f, %d, %f, %d)", Val.X.Scale, Val.X.Offset, Val.Y.Scale, Val.Y.Offset) end
+                    if typeof(Val) == "UDim" then return string.format("UDim.new(%f, %d)", Val.Scale, Val.Offset) end
+                    if typeof(Val) == "Color3" then return string.format("Color3.fromRGB(%d, %d, %d)", math.floor(Val.R*255), math.floor(Val.G*255), math.floor(Val.B*255)) end
+                    if typeof(Val) == "EnumItem" then return tostring(Val) end
+                    if typeof(Val) == "boolean" then return tostring(Val) end
+                    if typeof(Val) == "number" then return tostring(Val) end
+                    return "nil"
+                end
+
+                local varCounter = 0
+                
+                local function Process(Obj, ParentVar)
+                    if Obj.Name == "ReGui-Prefabs" then 
+                         -- Skip the root wrapper if it exists, look inside
+                         for _, c in ipairs(Obj:GetChildren()) do Process(c, ParentVar) end
+                         return
+                    end
+                    
+                    varCounter = varCounter + 1
+                    local varName = "Obj" .. varCounter
+                    
+                    local propsStr = "{"
+                    local interestingProps = {
+                        "Name", "Size", "Position", "BackgroundColor3", "BackgroundTransparency", 
+                        "BorderSizePixel", "BorderColor3", "ZIndex", "LayoutOrder", "Visible", "ClipsDescendants",
+                        "Text", "TextColor3", "TextSize", "Font", "TextXAlignment", "TextYAlignment", 
+                        "TextTransparency", "TextWrapped", "PlaceholderText", "ClearTextOnFocus", "MultiLine",
+                        "Image", "ImageColor3", "ImageTransparency", "ImageRectOffset", "ImageRectSize", "ScaleType", "SliceCenter",
+                        "ScrollBarThickness", "CanvasSize", "AutomaticCanvasSize", "ScrollBarImageColor3",
+                        "CornerRadius", "PaddingTop", "PaddingBottom", "PaddingLeft", "PaddingRight",
+                        "SortOrder", "FillDirection", "HorizontalAlignment", "VerticalAlignment", "CellPadding", "CellSize",
+                        "Thickness", "ApplyStrokeMode", "Color", "Transparency"
+                    }
+                    
+                    local first = true
+                    for _, prop in ipairs(interestingProps) do
+                        local s, val = pcall(function() return Obj[prop] end)
+                        if s and val ~= nil then
+                             -- Simple default filter
+                             local isDefault = (prop == "BackgroundTransparency" and val == 0) or
+                                               (prop == "BorderSizePixel" and val == 1) or
+                                               (prop == "Name" and val == Obj.ClassName) or
+                                               (prop == "Image" and val == "") or
+                                               (prop == "Text" and val == "")
+                                               
+                             if not isDefault then
+                                if not first then propsStr = propsStr .. ", " end
+                                propsStr = propsStr .. prop .. " = " .. SerializeVal(val)
+                                first = false
+                             end
+                        end
+                    end
+                    propsStr = propsStr .. "}"
+                    
+                    P(string.format("    local %s = Make('%s', %s, %s)", varName, Obj.ClassName, propsStr, ParentVar))
+                    
+                    for _, child in ipairs(Obj:GetChildren()) do
+                        Process(child, varName)
+                    end
+                end
+                
+                -- Start recursion from the loaded result
+                for _, child in ipairs(Prefabs:GetChildren()) do
+                    Process(child, "Prefabs")
+                end
+                
+                P("    return Prefabs")
+                P("end")
+                
+                local finalCode = table.concat(out, "\n")
+                
+                print(finalCode) -- Print to console
+                if setclipboard then
+                    setclipboard(finalCode)
+                    warn(">> CODE COPIED TO CLIPBOARD! <<")
+                end
+                
+                warn("-- Copy the code above this line --")
+                warn("---------------- END OF PREFABS DUMP ----------------\n")
+            end)
+            -------------------------------------------------------------------------
+
 			-- Save to file for next time
 			-- Save to file for next time (Non-blocking)
 			task.spawn(function()
