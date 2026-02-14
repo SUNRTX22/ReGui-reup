@@ -1,5 +1,5 @@
 --[[
-    Dear-ReGui - Open Source Build
+    Dear-ReGui - Open Source Build By DayToDay2044
     Built from src/ directory
     All modules bundled in one file
 ]]
@@ -4879,11 +4879,18 @@ end
 function ReGui:Init(Overwrites: table?)
 	Overwrites = Overwrites or {}
 
+	--// Build prefabs
+	if not self.Prefabs then
+		self.Prefabs = self:BuildInternalPrefabs()
+	end
+	
 	--// Check if the library has already initalised
 	if self.Initialised then return end
 
 	--// Cleanup previous instance if re-executing
-	self:Destroy()
+	if not (REGUI_WINDOWS or _G.REGUI_WINDOWS) then
+		self:Destroy()
+	end
 
 	--// Merge overwrites
 	Merge(self, Overwrites)
@@ -4900,14 +4907,13 @@ function ReGui:Init(Overwrites: table?)
 			Prefabs = function()
 				return self:LoadPrefabs()
 			end,
+	--// Fetch prefabs from script (Backup/Dev)
+	if not self.Prefabs then
+		self:CheckConfig(self, {
+			Prefabs = function()
+				return self:LoadPrefabs()
+			end,
 		}, true)
-		
-		--// If still nil, abort initialization
-		if not self.Prefabs then
-			self.Initialised = false
-			self:Warn("Failed to load Prefabs! Cannot initialize.")
-			return
-		end
 	end
 
 	--// Fetch folders
@@ -4988,18 +4994,15 @@ function ReGui:Init(Overwrites: table?)
 end
 
 function ReGui:BuildInternalPrefabs()
-    warn('[ReGui] Building Internal Prefabs (Volt Dump)...')
-    -- // FIX VOLT DUMP VALUES //
+    warn('[ReGui] Reverse Engineering By DayToDay2044')
     local inf = math.huge
     local ind = nil
     local function nan(...) return 0 end
-    -- // END FIX //
     local Folder = Instance.new('Folder')
     Folder.Name = 'ReGui-Prefabs'
     local Prefabs = Instance.new('Folder')
     Prefabs.Name = 'Prefabs'
     Prefabs.Parent = Folder
-    
     local Obj = {}
     local function Make(Class, Props, Parent)
         local Obj = Instance.new(Class)
@@ -5429,8 +5432,9 @@ function ReGui:CheckImportState()
     end)
     
     self:Init({Prefabs = self.Prefabs})
-    
-    if true then return end -- SKIP OLD CODE
+end
+
+--[[ REMOVED LEGACY DUMP/LOAD LOGIC
 
 	local fileName = "ReGui-Prefabs.rbxm"
 	local Prefabs = nil
@@ -5899,10 +5903,7 @@ function ReGui:CheckImportState()
                 end)
             end
             -------------------------------------------------------------------------
-	self:Init({
-		Prefabs = Prefabs
-	})
-end
+--]]
 
 function ReGui:GetVersion(): string
 	return self.Version
@@ -6361,7 +6362,6 @@ function ReGui:MakeResizable(Config: MakeResizableFlags)
 
 	local SizeOrgin = nil
 
-	--// Create grab element
 	--// Create grab element
 	local Grab = ReGui:InsertPrefab("ResizeGrab", {
 		Parent = Resize
