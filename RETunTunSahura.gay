@@ -1,5 +1,5 @@
 --[[
-    Dear-ReGui - Open Source Build By DayToDay2044
+    Dear-ReGui - Open Source Build
     Built from src/ directory
     All modules bundled in one file
 ]]
@@ -5434,7 +5434,7 @@ function ReGui:CheckImportState()
     self:Init({Prefabs = self.Prefabs})
 end
 
---[[ REMOVED LEGACY DUMP/LOAD LOGIC
+if false then -- REMOVED LEGACY DUMP/LOAD LOGIC
 
 	local fileName = "ReGui-Prefabs.rbxm"
 	local Prefabs = nil
@@ -5903,7 +5903,7 @@ end
                 end)
             end
             -------------------------------------------------------------------------
---]]
+end
 
 function ReGui:GetVersion(): string
 	return self.Version
