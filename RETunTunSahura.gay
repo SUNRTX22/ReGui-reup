@@ -1,5 +1,5 @@
 --[[
-    Dear-ReGui - Open Source Build
+    Dear-ReGui - Open Source Build By DayToDay2044
     Built from src/ directory
     All modules bundled in one file
 ]]
@@ -4879,11 +4879,6 @@ end
 function ReGui:Init(Overwrites: table?)
 	Overwrites = Overwrites or {}
 
-	--// Build prefabs
-	if not self.Prefabs then
-		self.Prefabs = self:BuildInternalPrefabs()
-	end
-	
 	--// Check if the library has already initalised
 	if self.Initialised then return end
 
@@ -4907,13 +4902,14 @@ function ReGui:Init(Overwrites: table?)
 			Prefabs = function()
 				return self:LoadPrefabs()
 			end,
-	--// Fetch prefabs from script (Backup/Dev)
-	if not self.Prefabs then
-		self:CheckConfig(self, {
-			Prefabs = function()
-				return self:LoadPrefabs()
-			end,
 		}, true)
+		
+		--// If still nil, abort initialization
+		if not self.Prefabs then
+			self.Initialised = false
+			self:Warn("Failed to load Prefabs! Cannot initialize.")
+			return
+		end
 	end
 
 	--// Fetch folders
@@ -5432,9 +5428,8 @@ function ReGui:CheckImportState()
     end)
     
     self:Init({Prefabs = self.Prefabs})
-end
-
-if false then -- REMOVED LEGACY DUMP/LOAD LOGIC
+    
+    if true then return end -- SKIP OLD CODE
 
 	local fileName = "ReGui-Prefabs.rbxm"
 	local Prefabs = nil
@@ -5903,6 +5898,9 @@ if false then -- REMOVED LEGACY DUMP/LOAD LOGIC
                 end)
             end
             -------------------------------------------------------------------------
+	self:Init({
+		Prefabs = Prefabs
+	})
 end
 
 function ReGui:GetVersion(): string
