@@ -1,4 +1,4 @@
---[[
+--[[ 
     Dear-ReGui - Open Source Build By DayToDay2044
     Built from src/ directory
     All modules bundled in one file
@@ -4883,7 +4883,7 @@ function ReGui:Init(Overwrites: table?)
 	if self.Initialised then return end
 
 	--// Cleanup previous instance if re-executing
-	if not (REGUI_WINDOWS or _G.REGUI_WINDOWS) then
+	if not (REGUI_WINDOWS or _G.REGUI_WINDOWS or (getgenv and getgenv().REGUI_WINDOWS)) then
 		self:Destroy()
 	end
 
@@ -11660,27 +11660,31 @@ function WindowClass:SetFocusedColors(State: string)
 	--// Color tags
 	local Tags = {
 		Focused = {
-			[Border] = "BorderActive",
 			[TitleBar] = "TitleBarBgActive",
 			[TitleLabel] = {
 				TextColor3 = "TitleActive"
 			}
 		},
 		UnFocused = {
-			[Border] = "Border",
 			[TitleBar] = "TitleBarBg",
 			[TitleLabel] = {
 				TextColor3 = "Title"
 			}
 		},
 		Collapsed = {
-			[Border] = "Border",
 			[TitleBar] = "TitleBarBgCollapsed",
 			[TitleLabel] = {
 				TextColor3 = "Title"
 			}
 		}
 	}
+
+	--// Apply border colors if it exists
+	if Border then
+		Tags.Focused[Border] = "BorderActive"
+		Tags.UnFocused[Border] = "Border"
+		Tags.Collapsed[Border] = "Border"
+	end
 
 	--// Update colors
 	ReGui:MultiUpdateColors({
